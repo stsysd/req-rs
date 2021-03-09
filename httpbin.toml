@@ -1,0 +1,21 @@
+[req.default]
+GET = 'https://httpbin.org/get'
+
+[req.default.queries]
+name = { fmt = "{name}" }
+
+
+[req.post]
+POST = 'https://httpbin.org/post'
+
+[req.post.headers]
+Authorization = { fmt = 'Token {token}' }
+'Content-Type' = 'application/json'
+
+[req.post.body]
+plain = { fmt = '{{ "name": "{name}" }}' }
+
+
+[values]
+token = 'foobarhogehoge'
+name = 'hoge'
