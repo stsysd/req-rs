@@ -279,7 +279,7 @@ fn main() -> std::io::Result<()> {
                 }
                 writeln!(out, "")?;
             }
-            out.write(res.bytes().unwrap().as_ref())?;
+            out.write_all(res.bytes().unwrap().as_ref())?;
         }
     }
     Ok(())
