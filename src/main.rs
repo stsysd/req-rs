@@ -43,6 +43,8 @@ struct ReqTask {
     queries: BTreeMap<String, ReqValue>,
     #[serde(deserialize_with = "de_body", default)]
     body: Option<ReqBody>,
+    #[serde(default)]
+    insecure: bool,
 
     description: Option<String>,
 }
@@ -144,7 +146,15 @@ fn toml_to_json(src: &toml::Value) -> serde_json::Value {
 impl ReqTask {
     fn exec(&self, ctxt: &HashMap<String, String>) -> reqwest::Result<reqwest::blocking::Response> {
         let (method, url) = self.method_and_url.split();
-        let mut builder = reqwest::blocking::Client::new().request(method, &url.render(ctxt));
+        let client = reqwest::blocking::ClientBuilder::new()
+            .danger_accept_invalid_certs(self.insecure)
+            .user_agent(format!(
+                "{}/{}",
+                env!("CARGO_BIN_NAME"),
+                env!("CARGO_PKG_VERSION")
+            ))
+            .build()?;
+        let mut builder = client.request(method, &url.render(ctxt));
         let q = self
             .queries
             .iter()
@@ -168,10 +178,6 @@ impl ReqTask {
             ReqValue::Atom(s) => vec![(key.as_str(), s.render(ctxt))],
             ReqValue::List(v) => v.iter().map(|s| (key.as_str(), s.render(ctxt))).collect(),
         });
-        builder = builder.header(
-            "User-Agent",
-            format!("{}/{}", env!("CARGO_BIN_NAME"), env!("CARGO_PKG_VERSION")),
-        );
         for (k, v) in h {
             builder = builder.header(k, v);
         }
