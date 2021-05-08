@@ -2,20 +2,20 @@
 GET = 'https://httpbin.org/get'
 
 [req.default.queries]
-name = { fmt = "{name}" }
+foo = ["$NAME", "bar"]
 
 
 [req.post]
 POST = 'https://httpbin.org/post'
 
 [req.post.headers]
-Authorization = { fmt = 'Token {token}' }
-'Content-Type' = 'application/json'
+Authorization= 'Token $TOKEN'
+Content-Type = 'application/json'
 
-[req.post.body]
-plain = { fmt = '{{ "name": "{name}" }}' }
-
+[req.post.body.json]
+name = '$NAME'
 
 [values]
-token = 'foobarhogehoge'
-name = 'hoge'
+GREETING_MESSAGE = 'hello $NAME'
+NAME = 'hoge'
+TOKEN = 'foobar'

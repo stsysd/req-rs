@@ -1,14 +1,16 @@
 #[macro_use]
 extern crate serde_derive;
 
+mod interpolation;
+
+use interpolation::{interpolate, interpolate_ctxt, InterpContext, InterpResult};
 use reqwest::Method;
-use serde::de::{self, Error, MapAccess, Visitor};
+use serde::de::Error as DeError;
 use serde::{Deserialize, Deserializer};
-use std::collections::{BTreeMap, HashMap};
-use std::fmt;
+use std::collections::BTreeMap;
+use std::error::Error;
 use std::fs;
 use std::io::{stdout, BufWriter, Write};
-use strfmt::strfmt;
 use structopt::StructOpt;
 
 #[derive(Debug, Deserialize)]
@@ -21,16 +23,16 @@ enum ReqConfig {
 #[derive(Debug, Deserialize)]
 struct ReqTable {
     req: BTreeMap<String, ReqTask>,
-    #[serde(default = "empty_hash_map")]
-    values: HashMap<String, String>,
+    #[serde(default = "empty_tree_map")]
+    values: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Deserialize)]
 struct ReqSingle {
     #[serde(flatten)]
     req: ReqTask,
-    #[serde(default = "empty_hash_map")]
-    values: HashMap<String, String>,
+    #[serde(default = "empty_tree_map")]
+    values: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -41,7 +43,7 @@ struct ReqTask {
     headers: BTreeMap<String, ReqValue>,
     #[serde(default = "empty_tree_map")]
     queries: BTreeMap<String, ReqValue>,
-    #[serde(deserialize_with = "de_body", default)]
+    #[serde(default)]
     body: Option<ReqBody>,
     #[serde(default)]
     insecure: bool,
@@ -52,32 +54,36 @@ struct ReqTask {
 #[derive(Debug, Deserialize)]
 #[serde(untagged)]
 enum ReqValue {
-    Atom(RawOrFmt),
-    List(Vec<RawOrFmt>),
+    Atom(String),
+    List(Vec<String>),
 }
 
-#[derive(Debug, Deserialize)]
-#[serde(untagged)]
-enum RawOrFmt {
-    Raw(String),
-    Fmt { fmt: String },
-}
-
-impl RawOrFmt {
-    fn render(&self, ctxt: &HashMap<String, String>) -> String {
+impl ReqValue {
+    fn into_vec(self) -> Vec<String> {
         match self {
-            RawOrFmt::Raw(s) => s.clone(),
-            RawOrFmt::Fmt { fmt } => strfmt(&fmt, ctxt).expect("fail to render fmt"),
+            ReqValue::Atom(s) => vec![s],
+            ReqValue::List(v) => v,
         }
+    }
+}
+
+fn interpolate_req_value(v: &ReqValue, ctxt: &InterpContext) -> InterpResult<ReqValue> {
+    match v {
+        ReqValue::Atom(s) => Ok(ReqValue::Atom(interpolate(s, ctxt)?.to_string())),
+        ReqValue::List(v) => Ok(ReqValue::List(
+            v.iter()
+                .map(|s| Ok(interpolate(s, ctxt)?.to_string()))
+                .collect::<InterpResult<_>>()?,
+        )),
     }
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(untagged)]
 enum MethodAndUrl {
-    Specific(MethodAndUrlSp),
+    Typical(MethodAndUrlTy),
     General {
-        url: RawOrFmt,
+        url: String,
         #[serde(deserialize_with = "de_method")]
         method: Option<Method>,
     },
@@ -85,15 +91,15 @@ enum MethodAndUrl {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "UPPERCASE")]
-enum MethodAndUrlSp {
-    Get(RawOrFmt),
-    Post(RawOrFmt),
-    Put(RawOrFmt),
-    Delete(RawOrFmt),
+enum MethodAndUrlTy {
+    Get(String),
+    Post(String),
+    Put(String),
+    Delete(String),
 }
 
 impl MethodAndUrl {
-    fn split(&self) -> (Method, &RawOrFmt) {
+    fn split(&self) -> (Method, &String) {
         match self {
             Self::General {
                 ref url,
@@ -103,10 +109,10 @@ impl MethodAndUrl {
                 ref url,
                 method: Some(ref m),
             } => (m.clone(), url),
-            Self::Specific(MethodAndUrlSp::Get(ref url)) => (Method::GET, url),
-            Self::Specific(MethodAndUrlSp::Post(ref url)) => (Method::POST, url),
-            Self::Specific(MethodAndUrlSp::Put(ref url)) => (Method::PUT, url),
-            Self::Specific(MethodAndUrlSp::Delete(ref url)) => (Method::DELETE, url),
+            Self::Typical(MethodAndUrlTy::Get(ref url)) => (Method::GET, url),
+            Self::Typical(MethodAndUrlTy::Post(ref url)) => (Method::POST, url),
+            Self::Typical(MethodAndUrlTy::Put(ref url)) => (Method::PUT, url),
+            Self::Typical(MethodAndUrlTy::Delete(ref url)) => (Method::DELETE, url),
         }
     }
 }
@@ -114,11 +120,52 @@ impl MethodAndUrl {
 #[derive(Debug, Deserialize)]
 enum ReqBody {
     #[serde(rename = "plain")]
-    PlainBody(RawOrFmt),
+    PlainBody(String),
     #[serde(rename = "json")]
     JsonBody(toml::Value),
     #[serde(rename = "form")]
-    FormBody(BTreeMap<String, RawOrFmt>),
+    FormBody(BTreeMap<String, String>),
+}
+
+fn interpolate_req_body(body: &ReqBody, ctxt: &InterpContext) -> InterpResult<ReqBody> {
+    let body = match body {
+        ReqBody::PlainBody(s) => ReqBody::PlainBody(interpolate(s, ctxt)?.to_string()),
+        ReqBody::FormBody(m) => ReqBody::FormBody(
+            m.iter()
+                .map(|(k, v)| {
+                    Ok((
+                        interpolate(k, ctxt)?.to_string(),
+                        interpolate(v, ctxt)?.to_string(),
+                    ))
+                })
+                .collect::<InterpResult<_>>()?,
+        ),
+        ReqBody::JsonBody(val) => ReqBody::JsonBody(interpolate_toml_value(val, ctxt)?),
+    };
+    Ok(body)
+}
+
+fn interpolate_toml_value(val: &toml::Value, ctxt: &InterpContext) -> InterpResult<toml::Value> {
+    let v = match val {
+        toml::Value::String(s) => toml::Value::String(interpolate(s, ctxt)?.to_string()),
+        toml::Value::Array(a) => toml::Value::Array(
+            a.iter()
+                .map(|v| interpolate_toml_value(v, ctxt))
+                .collect::<InterpResult<_>>()?,
+        ),
+        toml::Value::Table(t) => toml::Value::Table(
+            t.iter()
+                .map(|(k, v)| {
+                    Ok((
+                        interpolate(k, ctxt)?.to_string(),
+                        interpolate_toml_value(v, ctxt)?,
+                    ))
+                })
+                .collect::<InterpResult<_>>()?,
+        ),
+        _ => val.clone(),
+    };
+    Ok(v)
 }
 
 fn toml_to_json(src: &toml::Value) -> serde_json::Value {
@@ -144,7 +191,11 @@ fn toml_to_json(src: &toml::Value) -> serde_json::Value {
 }
 
 impl ReqTask {
-    fn exec(&self, ctxt: &HashMap<String, String>) -> reqwest::Result<reqwest::blocking::Response> {
+    fn exec(
+        &self,
+        ctxt: &BTreeMap<String, String>,
+    ) -> Result<reqwest::blocking::Response, Box<dyn Error>> {
+        let ctxt = &interpolate_ctxt(ctxt)?;
         let (method, url) = self.method_and_url.split();
         let client = reqwest::blocking::ClientBuilder::new()
             .danger_accept_invalid_certs(self.insecure)
@@ -154,34 +205,41 @@ impl ReqTask {
                 env!("CARGO_PKG_VERSION")
             ))
             .build()?;
-        let mut builder = client.request(method, &url.render(ctxt));
+        let mut builder = client.request(method, interpolate(url, ctxt)?.as_ref());
         let q = self
             .queries
             .iter()
-            .flat_map(|(key, val)| match val {
-                ReqValue::Atom(s) => vec![(key.as_str(), s.render(ctxt))],
-                ReqValue::List(v) => v.iter().map(|s| (key.as_str(), s.render(ctxt))).collect(),
+            .map(|(k, v)| {
+                Ok((
+                    interpolate(&k, ctxt)?.to_string(),
+                    interpolate_req_value(&v, ctxt)?,
+                ))
             })
-            .collect::<Vec<(&str, String)>>();
-        builder = builder.query(&q);
-        builder = match &self.body {
-            Some(ReqBody::PlainBody(s)) => builder.body(s.render(ctxt)),
-            Some(ReqBody::JsonBody(v)) => builder.json(&toml_to_json(v)),
-            Some(ReqBody::FormBody(m)) => builder.form(
-                &m.iter()
-                    .map(|(k, v)| (k, v.render(ctxt)))
-                    .collect::<BTreeMap<&String, String>>(),
-            ),
-            None => builder,
-        };
-        let h = self.headers.iter().flat_map(|(key, val)| match val {
-            ReqValue::Atom(s) => vec![(key.as_str(), s.render(ctxt))],
-            ReqValue::List(v) => v.iter().map(|s| (key.as_str(), s.render(ctxt))).collect(),
-        });
-        for (k, v) in h {
-            builder = builder.header(k, v);
+            .collect::<InterpResult<Vec<_>>>()?;
+        let q = &q
+            .into_iter()
+            .map(|(k, v)| (k, v.into_vec()))
+            .collect::<Vec<(String, Vec<String>)>>();
+        for (k, v) in q.iter() {
+            builder = builder.query(&v.iter().map(|u| (&k, u)).collect::<Vec<_>>());
         }
-        builder.send()
+        if let Some(body) = &self.body {
+            builder = match interpolate_req_body(body, ctxt)? {
+                ReqBody::PlainBody(s) => builder.body(s),
+                ReqBody::JsonBody(v) => builder.json(&toml_to_json(&v)),
+                ReqBody::FormBody(m) => builder.form(&m),
+            };
+        }
+        for (k, v) in self.headers.iter() {
+            let k = interpolate(k, ctxt)?;
+            let v = interpolate_req_value(v, ctxt)?;
+            for s in v.into_vec() {
+                builder = builder.header(k.as_ref(), &s);
+            }
+        }
+        let result = Ok(builder.send()?);
+        println!("{:?}", result);
+        result
     }
 }
 
@@ -199,44 +257,8 @@ where
     }
 }
 
-fn de_body<'de, D>(deserializer: D) -> Result<Option<ReqBody>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    struct StringOrStruct();
-
-    impl<'de> Visitor<'de> for StringOrStruct {
-        type Value = ReqBody;
-        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-            formatter.write_str("string or map")
-        }
-
-        fn visit_str<E>(self, value: &str) -> Result<ReqBody, E>
-        where
-            E: Error,
-        {
-            Ok(ReqBody::PlainBody(RawOrFmt::Raw(value.to_string())))
-        }
-
-        fn visit_map<M>(self, map: M) -> Result<ReqBody, M::Error>
-        where
-            M: MapAccess<'de>,
-        {
-            Deserialize::deserialize(de::value::MapAccessDeserializer::new(map))
-        }
-    }
-
-    deserializer
-        .deserialize_any(StringOrStruct())
-        .map(|v| Some(v))
-}
-
 fn empty_tree_map<T>() -> BTreeMap<String, T> {
     BTreeMap::new()
-}
-
-fn empty_hash_map<T>() -> HashMap<String, T> {
-    HashMap::new()
 }
 
 #[derive(Debug, StructOpt)]
@@ -252,7 +274,7 @@ struct Opt {
     key: String,
 }
 
-fn main() -> std::io::Result<()> {
+fn main() -> Result<(), Box<dyn Error>> {
     let opt = Opt::from_args();
     let input = fs::read_to_string(opt.input.as_str())
         .expect(format!("cannot read file {}", opt.input).as_str());
