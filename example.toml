@@ -1,7 +1,6 @@
-[req.default]
 GET = 'https://httpbin.org/get'
 
-[req.default.queries]
+[queries]
 foo = ["$NAME", "bar"]
 
 
