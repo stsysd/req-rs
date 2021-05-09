@@ -3,6 +3,7 @@ extern crate serde_derive;
 
 mod interpolation;
 
+use dotenv::dotenv;
 use interpolation::{interpolate, interpolate_ctxt, InterpContext, InterpResult};
 use reqwest::Method;
 use serde::de::Error as DeError;
@@ -20,11 +21,21 @@ enum ReqConfig {
     ReqTable(ReqTable),
 }
 
+#[derive(Debug, Deserialize, Default)]
+struct EnvSetting {
+    #[serde(default = "empty_vec")]
+    vars: Vec<String>,
+    #[serde(default)]
+    dotenv: bool,
+}
+
 #[derive(Debug, Deserialize)]
 struct ReqTable {
     req: BTreeMap<String, ReqTask>,
     #[serde(default = "empty_tree_map")]
     values: BTreeMap<String, String>,
+    #[serde(default)]
+    env: EnvSetting,
 }
 
 #[derive(Debug, Deserialize)]
@@ -33,6 +44,8 @@ struct ReqSingle {
     req: ReqTask,
     #[serde(default = "empty_tree_map")]
     values: BTreeMap<String, String>,
+    #[serde(default)]
+    env: EnvSetting,
 }
 
 #[derive(Debug, Deserialize)]
@@ -190,11 +203,26 @@ fn toml_to_json(src: &toml::Value) -> serde_json::Value {
     }
 }
 
+fn load_env(ctxt: &BTreeMap<String, String>, env: &EnvSetting) -> BTreeMap<String, String> {
+    if env.dotenv {
+        let _ = dotenv();
+    }
+    let mut m = ctxt.clone();
+    for key in env.vars.iter() {
+        if let Ok(v) = std::env::var(key) {
+            m.insert(key.to_string(), v);
+        }
+    }
+    m
+}
+
 impl ReqTask {
     fn exec(
         &self,
         ctxt: &BTreeMap<String, String>,
+        env: &EnvSetting,
     ) -> Result<reqwest::blocking::Response, Box<dyn Error>> {
+        let ctxt = &load_env(ctxt, env);
         let ctxt = &interpolate_ctxt(ctxt)?;
         let (method, url) = self.method_and_url.split();
         let client = reqwest::blocking::ClientBuilder::new()
@@ -238,7 +266,6 @@ impl ReqTask {
             }
         }
         let result = Ok(builder.send()?);
-        println!("{:?}", result);
         result
     }
 }
@@ -261,6 +288,10 @@ fn empty_tree_map<T>() -> BTreeMap<String, T> {
     BTreeMap::new()
 }
 
+fn empty_vec<T>() -> Vec<T> {
+    vec![]
+}
+
 #[derive(Debug, StructOpt)]
 #[structopt(name = "req", about = "execute http request")]
 struct Opt {
@@ -281,11 +312,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     let req = toml::from_str::<ReqConfig>(input.as_str())
         .expect(format!("cannot parse config file {}", opt.input).as_str());
     let ret = match &req {
-        ReqConfig::ReqSingle(ReqSingle { req, values }) => req.exec(values),
-        ReqConfig::ReqTable(ReqTable { req, values }) => req
+        ReqConfig::ReqSingle(ReqSingle { req, values, env }) => req.exec(values, env),
+        ReqConfig::ReqTable(ReqTable { req, values, env }) => req
             .get(&opt.key)
             .expect(format!("cannot find task <{}>", opt.key).as_str())
-            .exec(values),
+            .exec(values, env),
     };
     match ret {
         Err(e) => eprintln!("{}", e),
