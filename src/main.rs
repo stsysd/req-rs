@@ -298,11 +298,16 @@ struct Opt {
     #[structopt(name = "FILE")]
     input: String,
 
-    #[structopt(short = "i", long = "include")]
-    include: bool,
+    #[structopt(short = "i", long = "include-header")]
+    include_header: bool,
 
-    #[structopt(short = "k", long = "key", default_value = "default")]
-    key: String,
+    #[structopt(
+        short = "n",
+        long = "name",
+        long_help = "name of req-task",
+        default_value = "default"
+    )]
+    name: String,
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -314,8 +319,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     let ret = match &req {
         ReqConfig::ReqSingle(ReqSingle { req, values, env }) => req.exec(values, env),
         ReqConfig::ReqTable(ReqTable { req, values, env }) => req
-            .get(&opt.key)
-            .expect(format!("cannot find task <{}>", opt.key).as_str())
+            .get(&opt.name)
+            .expect(format!("cannot find task <{}>", opt.name).as_str())
             .exec(values, env),
     };
     match ret {
@@ -323,7 +328,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         Ok(res) => {
             let out = stdout();
             let mut out = BufWriter::new(out.lock());
-            if opt.include {
+            if opt.include_header {
                 let status = res.status();
                 write!(out, "{:?} {}", res.version(), status.as_str())?;
                 if let Some(reason) = status.canonical_reason() {
