@@ -94,7 +94,7 @@ fn interpolate_req_value(v: &ReqValue, ctxt: &InterpContext) -> InterpResult<Req
 #[derive(Debug, Deserialize)]
 #[serde(untagged)]
 enum MethodAndUrl {
-    Typical(MethodAndUrlTy),
+    Shorthand(MethodAndUrlShorthand),
     General {
         url: String,
         #[serde(deserialize_with = "de_method")]
@@ -104,11 +104,16 @@ enum MethodAndUrl {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "UPPERCASE")]
-enum MethodAndUrlTy {
+enum MethodAndUrlShorthand {
     Get(String),
     Post(String),
     Put(String),
     Delete(String),
+    Head(String),
+    Options(String),
+    Connect(String),
+    Patch(String),
+    Trace(String),
 }
 
 impl MethodAndUrl {
@@ -122,10 +127,15 @@ impl MethodAndUrl {
                 ref url,
                 method: Some(ref m),
             } => (m.clone(), url),
-            Self::Typical(MethodAndUrlTy::Get(ref url)) => (Method::GET, url),
-            Self::Typical(MethodAndUrlTy::Post(ref url)) => (Method::POST, url),
-            Self::Typical(MethodAndUrlTy::Put(ref url)) => (Method::PUT, url),
-            Self::Typical(MethodAndUrlTy::Delete(ref url)) => (Method::DELETE, url),
+            Self::Shorthand(MethodAndUrlShorthand::Get(ref url)) => (Method::GET, url),
+            Self::Shorthand(MethodAndUrlShorthand::Post(ref url)) => (Method::POST, url),
+            Self::Shorthand(MethodAndUrlShorthand::Put(ref url)) => (Method::PUT, url),
+            Self::Shorthand(MethodAndUrlShorthand::Delete(ref url)) => (Method::DELETE, url),
+            Self::Shorthand(MethodAndUrlShorthand::Head(ref url)) => (Method::HEAD, url),
+            Self::Shorthand(MethodAndUrlShorthand::Options(ref url)) => (Method::OPTIONS, url),
+            Self::Shorthand(MethodAndUrlShorthand::Connect(ref url)) => (Method::CONNECT, url),
+            Self::Shorthand(MethodAndUrlShorthand::Patch(ref url)) => (Method::PATCH, url),
+            Self::Shorthand(MethodAndUrlShorthand::Trace(ref url)) => (Method::TRACE, url),
         }
     }
 }
