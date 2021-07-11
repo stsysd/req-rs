@@ -21,7 +21,23 @@ impl fmt::Display for InterpError {
 impl std::error::Error for InterpError {}
 
 pub type InterpResult<T> = Result<T, InterpError>;
-pub type InterpContext = BTreeMap<String, String>;
+pub struct InterpContext(BTreeMap<String, String>);
+
+pub fn create_interpolation_context(map: BTreeMap<String, String>) -> InterpResult<InterpContext> {
+  let mut cache = HashMap::new();
+  Ok(InterpContext(
+    map
+      .iter()
+      .map(|(k, v)| {
+        Ok((
+          k.clone(),
+          interpolate_with_func(v, &mut |key| getter_with_cache(key, &map, &mut cache))?
+            .to_string(),
+        ))
+      })
+      .collect::<InterpResult<_>>()?,
+  ))
+}
 
 static PLACEHOLDER_PATTERN: Lazy<Regex> =
   Lazy::new(|| Regex::new(r"(\$)?\$(?:\{([^}]+)\}|([[:alnum:]]+))").unwrap());
@@ -52,7 +68,7 @@ where
 }
 
 pub fn interpolate<'i>(s: &'i str, ctxt: &'i InterpContext) -> InterpResult<Cow<'i, str>> {
-  interpolate_with_func(s, &mut |key| match ctxt.get(key) {
+  interpolate_with_func(s, &mut |key| match ctxt.0.get(key) {
     Some(s) => Ok(Cow::from(s)),
     None => Err(InterpError::ValueNotFound(key.to_string())),
   })
@@ -63,31 +79,18 @@ enum Delay<T> {
   Done(T),
 }
 
-pub fn interpolate_ctxt(ctxt: &InterpContext) -> InterpResult<InterpContext> {
-  let mut cache = HashMap::new();
-  ctxt
-    .iter()
-    .map(|(k, v)| {
-      Ok((
-        k.clone(),
-        interpolate_with_func(v, &mut |key| getter_with_cache(key, &ctxt, &mut cache))?.to_string(),
-      ))
-    })
-    .collect::<InterpResult<_>>()
-}
-
 fn getter_with_cache<'i>(
   key: &str,
-  ctxt: &'i InterpContext,
+  map: &'i BTreeMap<String, String>,
   cache: &mut HashMap<String, Delay<String>>,
 ) -> InterpResult<Cow<'i, str>> {
   match cache.get(key) {
     Some(Delay::Pending) => Err(InterpError::CircularReference(key.to_string())),
     Some(Delay::Done(s)) => Ok(Cow::from(s.clone())),
     None => {
-      if ctxt.contains_key(key) {
+      if map.contains_key(key) {
         cache.insert(key.to_string(), Delay::Pending);
-        let s = interpolate_with_func(&ctxt[key], &mut |k| getter_with_cache(k, ctxt, cache))?;
+        let s = interpolate_with_func(&map[key], &mut |k| getter_with_cache(k, map, cache))?;
         cache.insert(key.to_string(), Delay::Done(s.to_string()));
         Ok(Cow::from(s))
       } else {
@@ -106,6 +109,7 @@ mod tests {
     let mut ctxt = BTreeMap::new();
     ctxt.insert("greeting".into(), "hello".into());
     ctxt.insert("name".into(), "world".into());
+    let ctxt = create_interpolation_context(ctxt).unwrap();
     assert_eq!(
       interpolate("${greeting}, ${name}!", &ctxt).map(|s| s.into()),
       Ok(String::from("hello, world!")),
@@ -117,6 +121,7 @@ mod tests {
     let mut ctxt = BTreeMap::new();
     ctxt.insert("foo".into(), "bar".into());
     ctxt.insert("hoge".into(), "fuga".into());
+    let ctxt = create_interpolation_context(ctxt).unwrap();
     assert_eq!(
       interpolate(
         "this is interpolate => ${foo}, this is not => $${hoge}",
