@@ -5,20 +5,19 @@ use dotenv::dotenv;
 use reqwest::Method;
 use serde::de::{self, Deserialize, Deserializer, MapAccess, Visitor};
 use std::collections::BTreeMap;
-use std::error::Error;
 use std::fmt;
 
-#[derive(Debug, Clone)]
-pub enum ReqMethod {
-    Get(String),
-    Post(String),
-    Put(String),
-    Delete(String),
-    Head(String),
-    Options(String),
-    Connect(String),
-    Patch(String),
-    Trace(String),
+#[derive(Debug, Clone, Default)]
+pub struct ReqMethod {
+    get: Option<String>,
+    post: Option<String>,
+    put: Option<String>,
+    delete: Option<String>,
+    head: Option<String>,
+    options: Option<String>,
+    connect: Option<String>,
+    patch: Option<String>,
+    trace: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -29,11 +28,10 @@ pub enum ReqParam {
 }
 
 #[derive(Debug, Deserialize, Clone)]
-#[serde(rename_all = "lowercase")]
-pub enum ReqBody {
-    Plain(String),
-    Json(toml::Value),
-    Form(BTreeMap<String, String>),
+pub struct ReqBody {
+    plain: Option<String>,
+    json: Option<toml::Value>,
+    form: Option<BTreeMap<String, String>>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -105,31 +103,93 @@ pub enum Req {
 }
 
 impl ReqMethod {
+    fn is_empty(&self) -> bool {
+        vec![
+            &self.get,
+            &self.post,
+            &self.put,
+            &self.delete,
+            &self.head,
+            &self.options,
+            &self.connect,
+            &self.patch,
+            &self.trace,
+        ]
+        .iter()
+        .all(|x| x.is_none())
+    }
+
     fn method_and_url(&self) -> (Method, &str) {
-        match self {
-            ReqMethod::Get(url) => (Method::GET, url),
-            ReqMethod::Post(url) => (Method::POST, url),
-            ReqMethod::Put(url) => (Method::PUT, url),
-            ReqMethod::Delete(url) => (Method::DELETE, url),
-            ReqMethod::Head(url) => (Method::HEAD, url),
-            ReqMethod::Options(url) => (Method::OPTIONS, url),
-            ReqMethod::Connect(url) => (Method::CONNECT, url),
-            ReqMethod::Patch(url) => (Method::PATCH, url),
-            ReqMethod::Trace(url) => (Method::TRACE, url),
+        if let Some(ref s) = self.get {
+            (Method::GET, s)
+        } else if let Some(ref s) = self.post {
+            (Method::POST, s)
+        } else if let Some(ref s) = self.put {
+            (Method::PUT, s)
+        } else if let Some(ref s) = self.delete {
+            (Method::DELETE, s)
+        } else if let Some(ref s) = self.head {
+            (Method::HEAD, s)
+        } else if let Some(ref s) = self.options {
+            (Method::OPTIONS, s)
+        } else if let Some(ref s) = self.connect {
+            (Method::CONNECT, s)
+        } else if let Some(ref s) = self.patch {
+            (Method::PATCH, s)
+        } else if let Some(ref s) = self.trace {
+            (Method::TRACE, s)
+        } else {
+            panic!();
         }
     }
 
     fn interpolatte(&self, ctxt: &InterpContext) -> InterpResult<Self> {
-        Ok(match self {
-            ReqMethod::Get(ref s) => ReqMethod::Get(interpolate(s, ctxt)?.into()),
-            ReqMethod::Post(ref s) => ReqMethod::Post(interpolate(s, ctxt)?.into()),
-            ReqMethod::Put(ref s) => ReqMethod::Put(interpolate(s, ctxt)?.into()),
-            ReqMethod::Delete(ref s) => ReqMethod::Delete(interpolate(s, ctxt)?.into()),
-            ReqMethod::Head(ref s) => ReqMethod::Head(interpolate(s, ctxt)?.into()),
-            ReqMethod::Options(ref s) => ReqMethod::Options(interpolate(s, ctxt)?.into()),
-            ReqMethod::Connect(ref s) => ReqMethod::Connect(interpolate(s, ctxt)?.into()),
-            ReqMethod::Patch(ref s) => ReqMethod::Patch(interpolate(s, ctxt)?.into()),
-            ReqMethod::Trace(ref s) => ReqMethod::Trace(interpolate(s, ctxt)?.into()),
+        Ok(Self {
+            get: if let Some(ref s) = self.get {
+                Some(interpolate(s, ctxt)?.into())
+            } else {
+                None
+            },
+            post: if let Some(ref s) = self.post {
+                Some(interpolate(s, ctxt)?.into())
+            } else {
+                None
+            },
+            put: if let Some(ref s) = self.put {
+                Some(interpolate(s, ctxt)?.into())
+            } else {
+                None
+            },
+            delete: if let Some(ref s) = self.delete {
+                Some(interpolate(s, ctxt)?.into())
+            } else {
+                None
+            },
+            head: if let Some(ref s) = self.head {
+                Some(interpolate(s, ctxt)?.into())
+            } else {
+                None
+            },
+            options: if let Some(ref s) = self.options {
+                Some(interpolate(s, ctxt)?.into())
+            } else {
+                None
+            },
+            connect: if let Some(ref s) = self.connect {
+                Some(interpolate(s, ctxt)?.into())
+            } else {
+                None
+            },
+            patch: if let Some(ref s) = self.patch {
+                Some(interpolate(s, ctxt)?.into())
+            } else {
+                None
+            },
+            trace: if let Some(ref s) = self.trace {
+                Some(interpolate(s, ctxt)?.into())
+            } else {
+                None
+            },
         })
     }
 }
@@ -214,9 +274,13 @@ fn toml_to_json(src: &toml::Value) -> serde_json::Value {
 
 impl ReqBody {
     fn interpolate(&self, ctxt: &InterpContext) -> InterpResult<Self> {
-        match self {
-            ReqBody::Plain(ref s) => Ok(ReqBody::Plain(interpolate(s, ctxt)?.to_string())),
-            ReqBody::Form(ref m) => Ok(ReqBody::Form(
+        let ReqBody { plain, form, json } = self;
+        let plain = match plain {
+            Some(s) => Some(interpolate(s, ctxt)?.to_string()),
+            None => None,
+        };
+        let form = match form {
+            Some(m) => Some(
                 m.iter()
                     .map(|(k, v)| {
                         Ok((
@@ -225,9 +289,14 @@ impl ReqBody {
                         ))
                     })
                     .collect::<InterpResult<BTreeMap<String, String>>>()?,
-            )),
-            ReqBody::Json(ref v) => Ok(ReqBody::Json(interpolate_toml_value(v, ctxt)?)),
-        }
+            ),
+            None => None,
+        };
+        let json = match json {
+            Some(v) => Some(interpolate_toml_value(v, ctxt)?),
+            None => None,
+        };
+        Ok(ReqBody { plain, form, json })
     }
 }
 
@@ -256,7 +325,7 @@ impl ReqTask {
         })
     }
 
-    pub fn send(&self) -> Result<reqwest::blocking::Response, Box<dyn Error>> {
+    pub fn send(&self) -> Result<reqwest::blocking::Response, reqwest::Error> {
         let (method, url) = self.method.method_and_url();
         let client = reqwest::blocking::ClientBuilder::new()
             .danger_accept_invalid_certs(self.insecure)
@@ -275,11 +344,13 @@ impl ReqTask {
         for (k, v) in q.iter() {
             builder = builder.query(&v.iter().map(|u| (&k, u)).collect::<Vec<_>>());
         }
-        builder = match &self.body {
-            ReqBody::Plain(s) => builder.body(s.clone()),
-            ReqBody::Json(ref v) => builder.json(&toml_to_json(v)),
-            ReqBody::Form(ref m) => builder.form(m),
-        };
+        if let Some(ref s) = self.body.plain {
+            builder = builder.body(s.clone());
+        } else if let Some(ref m) = self.body.form {
+            builder = builder.form(m);
+        } else if let Some(ref v) = self.body.json {
+            builder = builder.json(&toml_to_json(v));
+        }
         for (k, v) in self.headers.iter() {
             for s in v.clone().into_vec() {
                 builder = builder.header(k, &s);
@@ -313,7 +384,7 @@ fn load_env(values: &BTreeMap<String, String>, config: &ReqConfig) -> BTreeMap<S
 }
 
 impl Req {
-    pub fn get_task(self, name: Option<String>) -> InterpResult<ReqTask> {
+    pub fn get_task(self, name: &Option<String>) -> InterpResult<Option<ReqTask>> {
         match self {
             Req::One(ReqOne {
                 method,
@@ -336,18 +407,24 @@ impl Req {
                 let values = load_env(values, config);
                 let ctxt = create_interpolation_context(values)?;
                 let task = task.interpolate(&ctxt)?;
-                Ok(task)
+                Ok(Some(task))
             }
             Req::Many(ReqMany {
                 table,
                 ref values,
                 ref config,
             }) => {
-                let name = name.unwrap();
                 let values = load_env(values, config);
                 let ctxt = create_interpolation_context(values)?;
-                let task = table.get(&name).unwrap().interpolate(&ctxt)?;
-                Ok(task)
+                let task = match name {
+                    Some(name) => table.get(name),
+                    None => None,
+                };
+                if let Some(task) = task {
+                    Ok(Some(task.interpolate(&ctxt)?))
+                } else {
+                    Ok(None)
+                }
             }
         }
     }
@@ -404,7 +481,7 @@ impl<'de> Deserialize<'de> for ReqOne {
             where
                 V: MapAccess<'de>,
             {
-                let mut method = None;
+                let mut method = ReqMethod::default();
                 let mut headers = None;
                 let mut queries = None;
                 let mut body = None;
@@ -416,76 +493,76 @@ impl<'de> Deserialize<'de> for ReqOne {
                 while let Some(key) = map.next_key()? {
                     match key {
                         Field::Get => {
-                            if method.is_some() {
+                            if !method.is_empty() {
                                 return Err(de::Error::custom(
                                     "duplicate definition of method and url",
                                 ));
                             }
-                            method = Some(ReqMethod::Get(map.next_value()?));
+                            method.get = Some(map.next_value()?);
                         }
                         Field::Post => {
-                            if method.is_some() {
+                            if !method.is_empty() {
                                 return Err(de::Error::custom(
                                     "duplicate definition of method and url",
                                 ));
                             }
-                            method = Some(ReqMethod::Post(map.next_value()?));
+                            method.post = Some(map.next_value()?);
                         }
                         Field::Put => {
-                            if method.is_some() {
+                            if !method.is_empty() {
                                 return Err(de::Error::custom(
                                     "duplicate definition of method and url",
                                 ));
                             }
-                            method = Some(ReqMethod::Put(map.next_value()?));
+                            method.put = Some(map.next_value()?);
                         }
                         Field::Delete => {
-                            if method.is_some() {
+                            if !method.is_empty() {
                                 return Err(de::Error::custom(
                                     "duplicate definition of method and url",
                                 ));
                             }
-                            method = Some(ReqMethod::Delete(map.next_value()?));
+                            method.delete = Some(map.next_value()?);
                         }
                         Field::Head => {
-                            if method.is_some() {
+                            if !method.is_empty() {
                                 return Err(de::Error::custom(
                                     "duplicate definition of method and url",
                                 ));
                             }
-                            method = Some(ReqMethod::Head(map.next_value()?));
+                            method.head = Some(map.next_value()?);
                         }
                         Field::Options => {
-                            if method.is_some() {
+                            if !method.is_empty() {
                                 return Err(de::Error::custom(
                                     "duplicate definition of method and url",
                                 ));
                             }
-                            method = Some(ReqMethod::Options(map.next_value()?));
+                            method.options = Some(map.next_value()?);
                         }
                         Field::Connect => {
-                            if method.is_some() {
+                            if !method.is_empty() {
                                 return Err(de::Error::custom(
                                     "duplicate definition of method and url",
                                 ));
                             }
-                            method = Some(ReqMethod::Connect(map.next_value()?));
+                            method.connect = Some(map.next_value()?);
                         }
                         Field::Patch => {
-                            if method.is_some() {
+                            if !method.is_empty() {
                                 return Err(de::Error::custom(
                                     "duplicate definition of method and url",
                                 ));
                             }
-                            method = Some(ReqMethod::Patch(map.next_value()?));
+                            method.patch = Some(map.next_value()?);
                         }
                         Field::Trace => {
-                            if method.is_some() {
+                            if !method.is_empty() {
                                 return Err(de::Error::custom(
                                     "duplicate definition of method and url",
                                 ));
                             }
-                            method = Some(ReqMethod::Trace(map.next_value()?));
+                            method.trace = Some(map.next_value()?);
                         }
                         Field::Headers => {
                             if headers.is_some() {
@@ -531,11 +608,16 @@ impl<'de> Deserialize<'de> for ReqOne {
                         }
                     }
                 }
-                let method = method
-                    .ok_or_else(|| de::Error::custom("missing definition of method and url"))?;
+                if method.is_empty() {
+                    return Err(de::Error::custom("missing definition of method and url"));
+                }
                 let headers = headers.unwrap_or_default();
                 let queries = queries.unwrap_or_default();
-                let body = body.unwrap_or_else(|| ReqBody::Plain(String::from("")));
+                let body = body.unwrap_or_else(|| ReqBody {
+                    plain: None,
+                    form: None,
+                    json: None,
+                });
                 let insecure = insecure.unwrap_or_default();
                 let description = description.unwrap_or_default();
                 let values = values.unwrap_or_default();
@@ -620,7 +702,7 @@ impl<'de> Deserialize<'de> for ReqTask {
             where
                 V: MapAccess<'de>,
             {
-                let mut method = None;
+                let mut method = ReqMethod::default();
                 let mut headers = None;
                 let mut queries = None;
                 let mut body = None;
@@ -630,76 +712,76 @@ impl<'de> Deserialize<'de> for ReqTask {
                 while let Some(key) = map.next_key()? {
                     match key {
                         Field::Get => {
-                            if method.is_some() {
+                            if !method.is_empty() {
                                 return Err(de::Error::custom(
                                     "duplicate definition of method and url",
                                 ));
                             }
-                            method = Some(ReqMethod::Get(map.next_value()?));
+                            method.get = Some(map.next_value()?);
                         }
                         Field::Post => {
-                            if method.is_some() {
+                            if !method.is_empty() {
                                 return Err(de::Error::custom(
                                     "duplicate definition of method and url",
                                 ));
                             }
-                            method = Some(ReqMethod::Post(map.next_value()?));
+                            method.post = Some(map.next_value()?);
                         }
                         Field::Put => {
-                            if method.is_some() {
+                            if !method.is_empty() {
                                 return Err(de::Error::custom(
                                     "duplicate definition of method and url",
                                 ));
                             }
-                            method = Some(ReqMethod::Put(map.next_value()?));
+                            method.put = Some(map.next_value()?);
                         }
                         Field::Delete => {
-                            if method.is_some() {
+                            if !method.is_empty() {
                                 return Err(de::Error::custom(
                                     "duplicate definition of method and url",
                                 ));
                             }
-                            method = Some(ReqMethod::Delete(map.next_value()?));
+                            method.delete = Some(map.next_value()?);
                         }
                         Field::Head => {
-                            if method.is_some() {
+                            if !method.is_empty() {
                                 return Err(de::Error::custom(
                                     "duplicate definition of method and url",
                                 ));
                             }
-                            method = Some(ReqMethod::Head(map.next_value()?));
+                            method.head = Some(map.next_value()?);
                         }
                         Field::Options => {
-                            if method.is_some() {
+                            if !method.is_empty() {
                                 return Err(de::Error::custom(
                                     "duplicate definition of method and url",
                                 ));
                             }
-                            method = Some(ReqMethod::Options(map.next_value()?));
+                            method.options = Some(map.next_value()?);
                         }
                         Field::Connect => {
-                            if method.is_some() {
+                            if !method.is_empty() {
                                 return Err(de::Error::custom(
                                     "duplicate definition of method and url",
                                 ));
                             }
-                            method = Some(ReqMethod::Connect(map.next_value()?));
+                            method.connect = Some(map.next_value()?);
                         }
                         Field::Patch => {
-                            if method.is_some() {
+                            if !method.is_empty() {
                                 return Err(de::Error::custom(
                                     "duplicate definition of method and url",
                                 ));
                             }
-                            method = Some(ReqMethod::Patch(map.next_value()?));
+                            method.patch = Some(map.next_value()?);
                         }
                         Field::Trace => {
-                            if method.is_some() {
+                            if !method.is_empty() {
                                 return Err(de::Error::custom(
                                     "duplicate definition of method and url",
                                 ));
                             }
-                            method = Some(ReqMethod::Trace(map.next_value()?));
+                            method.trace = Some(map.next_value()?);
                         }
                         Field::Headers => {
                             if headers.is_some() {
@@ -733,11 +815,16 @@ impl<'de> Deserialize<'de> for ReqTask {
                         }
                     }
                 }
-                let method = method
-                    .ok_or_else(|| de::Error::custom("missing definition of method and url"))?;
+                if method.is_empty() {
+                    return Err(de::Error::custom("missing definition of method and url"));
+                }
                 let headers = headers.unwrap_or_default();
                 let queries = queries.unwrap_or_default();
-                let body = body.unwrap_or_else(|| ReqBody::Plain(String::from("")));
+                let body = body.unwrap_or_else(|| ReqBody {
+                    plain: None,
+                    form: None,
+                    json: None,
+                });
                 let insecure = insecure.unwrap_or_default();
                 let description = description.unwrap_or_default();
 
