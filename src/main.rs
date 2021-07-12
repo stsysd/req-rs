@@ -4,8 +4,8 @@ extern crate serde_derive;
 mod data;
 mod interpolation;
 
+use anyhow::{anyhow, Context};
 use data::Req;
-use std::error::Error;
 use std::fs;
 use std::io::{stdout, BufWriter, Write};
 use structopt::StructOpt;
@@ -26,24 +26,24 @@ struct Opt {
     dryrun: bool,
 }
 
-fn main() {
-    if let Err(e) = run() {
-        eprintln!("Application Error: {}", e);
-        std::process::exit(1);
-    }
-}
-
-fn run() -> Result<(), Box<dyn Error>> {
+fn main() -> anyhow::Result<()> {
     let opt = Opt::from_args();
     let input = fs::read_to_string(opt.input.as_str())
-        .expect(format!("cannot read file {}", opt.input).as_str());
-    let req = toml::from_str::<Req>(input.as_str())?;
-    let task = req.get_task(opt.name)?;
+        .context(format!("fail to open file: {}", opt.input))?;
+    let req =
+        toml::from_str::<Req>(input.as_str()).context(format!("malformed file: {}", opt.input))?;
+    let task = req
+        .get_task(&opt.name)
+        .context(format!("fail to resolve context: {}", opt.input))?;
+    let task = task.ok_or_else(|| match &opt.name {
+        Some(name) => anyhow!("task `{}` is not defined", name),
+        None => anyhow!("option `name` is required"),
+    })?;
     if opt.dryrun {
         println!("{:#?}", task);
         return Ok(());
     }
-    let res = task.send()?;
+    let res = task.send().context("fail to send request")?;
     let out = stdout();
     let mut out = BufWriter::new(out.lock());
     if opt.include_header {
@@ -61,6 +61,6 @@ fn run() -> Result<(), Box<dyn Error>> {
         }
         writeln!(out, "")?;
     }
-    out.write_all(res.bytes().unwrap().as_ref())?;
+    out.write_all(res.bytes()?.as_ref())?;
     Ok(())
 }
