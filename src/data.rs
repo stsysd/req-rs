@@ -1,7 +1,6 @@
 use crate::interpolation::{
     create_interpolation_context, interpolate, InterpContext, InterpResult,
 };
-use dotenv::dotenv;
 use reqwest::Method;
 use serde::de::{self, Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
 use std::collections::BTreeMap;
@@ -48,33 +47,6 @@ pub enum ReqBody {
     Form(BTreeMap<String, String>),
 }
 
-#[derive(Debug, Deserialize, Clone)]
-#[serde(untagged)]
-pub enum ReqEnvVars {
-    All(bool),
-    Whitelist(Vec<String>),
-}
-
-fn default_envvars() -> ReqEnvVars {
-    ReqEnvVars::All(false)
-}
-
-#[derive(Debug, Deserialize, Clone)]
-pub struct ReqConfig {
-    #[serde(default = "default_envvars")]
-    pub envvars: ReqEnvVars,
-
-    #[serde(default)]
-    pub dotenv: bool,
-}
-
-fn default_config() -> ReqConfig {
-    ReqConfig {
-        envvars: default_envvars(),
-        dotenv: false,
-    }
-}
-
 #[derive(Debug, Clone)]
 struct ReqParam(Vec<String>);
 
@@ -87,7 +59,6 @@ pub struct ReqOne {
     insecure: bool,
     description: String,
     values: BTreeMap<String, String>,
-    config: ReqConfig,
 }
 
 #[derive(Debug, Clone)]
@@ -107,9 +78,6 @@ pub struct ReqMany {
 
     #[serde(default)]
     values: BTreeMap<String, String>,
-
-    #[serde(default = "default_config")]
-    config: ReqConfig,
 }
 
 impl From<ReqMethodOpt> for ReqMethod {
@@ -347,28 +315,6 @@ impl ReqTask {
     }
 }
 
-fn load_env(values: &BTreeMap<String, String>, config: &ReqConfig) -> BTreeMap<String, String> {
-    if config.dotenv {
-        let _ = dotenv();
-    }
-    let mut m = values.clone();
-    match config.envvars {
-        ReqEnvVars::Whitelist(ref vars) => {
-            for key in vars.iter() {
-                if let Ok(v) = std::env::var(key) {
-                    m.insert(key.to_string(), v);
-                }
-            }
-            m
-        }
-        ReqEnvVars::All(true) => {
-            m.extend(std::env::vars());
-            m
-        }
-        _ => m,
-    }
-}
-
 impl ReqOne {
     pub fn to_task(self) -> InterpResult<ReqTask> {
         let ReqOne {
@@ -378,8 +324,7 @@ impl ReqOne {
             body,
             insecure,
             description,
-            ref values,
-            ref config,
+            values,
         } = self;
         let task = ReqTask {
             method,
@@ -389,27 +334,69 @@ impl ReqOne {
             insecure,
             description,
         };
-        let values = load_env(values, config);
         let ctxt = create_interpolation_context(values)?;
         let task = task.interpolate(&ctxt)?;
         Ok(task)
+    }
+
+    pub fn with_values<I>(self, vals: I) -> Self
+    where
+        I: IntoIterator<Item = (String, String)>,
+    {
+        let ReqOne { mut values, .. } = self;
+        for (k, v) in vals.into_iter() {
+            values.insert(k, v);
+        }
+        ReqOne { values, ..self }
+    }
+
+    pub fn with_default<I>(self, vals: I) -> Self
+    where
+        I: IntoIterator<Item = (String, String)>,
+    {
+        let ReqOne { mut values, .. } = self;
+        for (k, v) in vals.into_iter() {
+            if !values.contains_key(&k) {
+                values.insert(k, v);
+            }
+        }
+        ReqOne { values, ..self }
     }
 }
 
 impl ReqMany {
     pub fn get_task(self, name: &str) -> InterpResult<Option<ReqTask>> {
-        let ReqMany {
-            table,
-            ref values,
-            ref config,
-        } = self;
-        let values = load_env(values, config);
+        let ReqMany { table, values } = self;
         let ctxt = create_interpolation_context(values)?;
         if let Some(task) = table.get(name) {
             Ok(Some(task.interpolate(&ctxt)?))
         } else {
             Ok(None)
         }
+    }
+
+    pub fn with_values<I>(self, vals: I) -> Self
+    where
+        I: IntoIterator<Item = (String, String)>,
+    {
+        let ReqMany { mut values, .. } = self;
+        for (k, v) in vals.into_iter() {
+            values.insert(k, v);
+        }
+        ReqMany { values, ..self }
+    }
+
+    pub fn with_default<I>(self, vals: I) -> Self
+    where
+        I: IntoIterator<Item = (String, String)>,
+    {
+        let ReqMany { mut values, .. } = self;
+        for (k, v) in vals.into_iter() {
+            if !values.contains_key(&k) {
+                values.insert(k, v);
+            }
+        }
+        ReqMany { values, ..self }
     }
 }
 
@@ -485,7 +472,6 @@ impl<'de> Deserialize<'de> for ReqOne {
             Insecure,
             Description,
             Values,
-            Config,
         }
 
         struct ReqOneVisitor;
@@ -508,7 +494,6 @@ impl<'de> Deserialize<'de> for ReqOne {
                 let mut insecure = None;
                 let mut description = None;
                 let mut values = None;
-                let mut config = None;
 
                 while let Some(key) = map.next_key()? {
                     match key {
@@ -625,12 +610,6 @@ impl<'de> Deserialize<'de> for ReqOne {
                             }
                             values = Some(map.next_value()?);
                         }
-                        Field::Config => {
-                            if config.is_some() {
-                                return Err(de::Error::duplicate_field("config"));
-                            }
-                            config = Some(map.next_value()?);
-                        }
                     }
                 }
                 if method.is_empty() {
@@ -643,7 +622,6 @@ impl<'de> Deserialize<'de> for ReqOne {
                 let insecure = insecure.unwrap_or_default();
                 let description = description.unwrap_or_default();
                 let values = values.unwrap_or_default();
-                let config = config.unwrap_or_else(default_config);
 
                 Ok(ReqOne {
                     method,
@@ -653,7 +631,6 @@ impl<'de> Deserialize<'de> for ReqOne {
                     insecure,
                     description,
                     values,
-                    config,
                 })
             }
         }
