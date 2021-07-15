@@ -2,22 +2,35 @@ req is a http request builder from configuration file.
 
 ## USAGE
 ```
-req [FLAGS] [OPTIONS] <FILE>
+req 0.2.0
+send http request
+
+USAGE:
+    req [FLAGS] [OPTIONS] <FILE>
 
 FLAGS:
+        --dryrun            
+            
+
     -h, --help              
             Prints help information
 
     -i, --include-header    
             
 
-    -V, --version           
+        --version           
             Prints version information
 
 
 OPTIONS:
-    -n, --name <name>    
+        --dotenv <dotenv>      
+            
+
+    -n, --name <name>          
             name of request
+
+    -V, --value <values>...    
+            
 
 
 ARGS:
@@ -68,7 +81,7 @@ authorization = 'Bearer FOOBAR'
 ```
 
 ### With Body
-```
+```toml
 # content-type: text/plain
 [req.with-plain]
 POST = 'https://example.com'
@@ -92,11 +105,11 @@ bar = 'bbb'
 [req.with-json]
 POST = 'https://example.com'
 
-[req.with-form.body.json]
+[req.with-json.body.json]
 foo = 'aaa'
 bar = 'bbb'
 
-[req.with-form.body.json.data]
+[req.with-json.body.json.data]
 can = ['send', 'structured', { data = true }]
 ```
 
@@ -117,25 +130,13 @@ BAZ = 'FOO_BAR is ${FOO_BAR}'
 ### Environment Variables
 
 ```toml
-# FOO=ok BAZ=ng req example.toml
-
-[env]
-# specify env variables using
-vars = ['FOO', 'BAR']
+# FOO=hidden req example.toml BAZ=overwritten
 
 [values]
 FOO = 'default FOO value'
 BAR = 'default BAR value'
 
-foo = 'FOO is ${FOO}' # => 'FOO is ok'
+foo = 'FOO is ${FOO}' # => 'FOO is default FOO value'
 bar = 'BAR is ${BAR}' # => 'BAR is deault BAR value'
-baz = 'BAZ is ${BAZ}' # => ERROR: variable named "BAZ" not defined
-```
-
-### Enable dotenv
-
-```toml
-[env]
-# enable to load `.env`
-dotenv = true
+baz = 'BAZ is ${BAZ}' # => 'BAZ is overwritten'
 ```
