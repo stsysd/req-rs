@@ -67,11 +67,15 @@ where
   }
 }
 
-pub fn interpolate<'i>(s: &'i str, ctxt: &'i InterpContext) -> InterpResult<Cow<'i, str>> {
+pub fn interpolate<'i, T>(s: &'i str, ctxt: &'i InterpContext) -> InterpResult<T>
+where
+  T: From<Cow<'i, str>>,
+{
   interpolate_with_func(s, &mut |key| match ctxt.0.get(key) {
     Some(s) => Ok(Cow::from(s)),
     None => Err(InterpError::ValueNotFound(key.to_string())),
   })
+  .map(|c| c.into())
 }
 
 enum Delay<T> {
@@ -111,7 +115,7 @@ mod tests {
     ctxt.insert("name".into(), "world".into());
     let ctxt = create_interpolation_context(ctxt).unwrap();
     assert_eq!(
-      interpolate("${greeting}, ${name}!", &ctxt).map(|s| s.into()),
+      interpolate("${greeting}, ${name}!", &ctxt),
       Ok(String::from("hello, world!")),
     );
   }
@@ -126,8 +130,7 @@ mod tests {
       interpolate(
         "this is interpolate => ${foo}, this is not => $${hoge}",
         &ctxt
-      )
-      .map(|s| s.to_string()),
+      ),
       Ok(String::from(
         "this is interpolate => bar, this is not => ${hoge}"
       )),

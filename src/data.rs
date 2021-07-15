@@ -3,12 +3,12 @@ use crate::interpolation::{
 };
 use dotenv::dotenv;
 use reqwest::Method;
-use serde::de::{self, Deserialize, Deserializer, MapAccess, Visitor};
+use serde::de::{self, Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
 use std::collections::BTreeMap;
 use std::fmt;
 
 #[derive(Debug, Clone, Default)]
-pub struct ReqMethod {
+pub struct ReqMethodOpt {
     get: Option<String>,
     post: Option<String>,
     put: Option<String>,
@@ -20,18 +20,32 @@ pub struct ReqMethod {
     trace: Option<String>,
 }
 
-#[derive(Debug, Deserialize, Clone)]
-#[serde(untagged)]
-pub enum ReqParam {
-    Atom(String),
-    List(Vec<String>),
+#[derive(Debug, Clone)]
+pub enum ReqMethod {
+    Get(String),
+    Post(String),
+    Put(String),
+    Delete(String),
+    Head(String),
+    Options(String),
+    Connect(String),
+    Patch(String),
+    Trace(String),
 }
 
-#[derive(Debug, Deserialize, Clone)]
-pub struct ReqBody {
+#[derive(Debug, Deserialize, Clone, Default)]
+pub struct ReqBodyOpt {
     plain: Option<String>,
     json: Option<toml::Value>,
     form: Option<BTreeMap<String, String>>,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+#[serde(from = "ReqBodyOpt")]
+pub enum ReqBody {
+    Plain(String),
+    Json(toml::Value),
+    Form(BTreeMap<String, String>),
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -60,6 +74,9 @@ fn default_config() -> ReqConfig {
         dotenv: false,
     }
 }
+
+#[derive(Debug, Clone)]
+struct ReqParam(Vec<String>);
 
 #[derive(Debug, Clone)]
 pub struct ReqOne {
@@ -95,14 +112,33 @@ pub struct ReqMany {
     config: ReqConfig,
 }
 
-#[derive(Debug, Deserialize, Clone)]
-#[serde(untagged)]
-pub enum Req {
-    One(ReqOne),
-    Many(ReqMany),
+impl From<ReqMethodOpt> for ReqMethod {
+    fn from(opt: ReqMethodOpt) -> Self {
+        if let Some(s) = opt.get {
+            ReqMethod::Get(s)
+        } else if let Some(s) = opt.post {
+            ReqMethod::Post(s)
+        } else if let Some(s) = opt.put {
+            ReqMethod::Put(s)
+        } else if let Some(s) = opt.delete {
+            ReqMethod::Delete(s)
+        } else if let Some(s) = opt.head {
+            ReqMethod::Head(s)
+        } else if let Some(s) = opt.options {
+            ReqMethod::Options(s)
+        } else if let Some(s) = opt.connect {
+            ReqMethod::Connect(s)
+        } else if let Some(s) = opt.patch {
+            ReqMethod::Patch(s)
+        } else if let Some(s) = opt.trace {
+            ReqMethod::Trace(s)
+        } else {
+            panic!();
+        }
+    }
 }
 
-impl ReqMethod {
+impl ReqMethodOpt {
     fn is_empty(&self) -> bool {
         vec![
             &self.get,
@@ -118,99 +154,35 @@ impl ReqMethod {
         .iter()
         .all(|x| x.is_none())
     }
+}
 
+impl ReqMethod {
     fn method_and_url(&self) -> (Method, &str) {
-        if let Some(ref s) = self.get {
-            (Method::GET, s)
-        } else if let Some(ref s) = self.post {
-            (Method::POST, s)
-        } else if let Some(ref s) = self.put {
-            (Method::PUT, s)
-        } else if let Some(ref s) = self.delete {
-            (Method::DELETE, s)
-        } else if let Some(ref s) = self.head {
-            (Method::HEAD, s)
-        } else if let Some(ref s) = self.options {
-            (Method::OPTIONS, s)
-        } else if let Some(ref s) = self.connect {
-            (Method::CONNECT, s)
-        } else if let Some(ref s) = self.patch {
-            (Method::PATCH, s)
-        } else if let Some(ref s) = self.trace {
-            (Method::TRACE, s)
-        } else {
-            panic!();
+        match self {
+            ReqMethod::Get(ref s) => (Method::GET, s),
+            ReqMethod::Post(ref s) => (Method::POST, s),
+            ReqMethod::Put(ref s) => (Method::PUT, s),
+            ReqMethod::Delete(ref s) => (Method::DELETE, s),
+            ReqMethod::Head(ref s) => (Method::HEAD, s),
+            ReqMethod::Options(ref s) => (Method::OPTIONS, s),
+            ReqMethod::Connect(ref s) => (Method::CONNECT, s),
+            ReqMethod::Patch(ref s) => (Method::PATCH, s),
+            ReqMethod::Trace(ref s) => (Method::TRACE, s),
         }
     }
 
     fn interpolatte(&self, ctxt: &InterpContext) -> InterpResult<Self> {
-        Ok(Self {
-            get: if let Some(ref s) = self.get {
-                Some(interpolate(s, ctxt)?.into())
-            } else {
-                None
-            },
-            post: if let Some(ref s) = self.post {
-                Some(interpolate(s, ctxt)?.into())
-            } else {
-                None
-            },
-            put: if let Some(ref s) = self.put {
-                Some(interpolate(s, ctxt)?.into())
-            } else {
-                None
-            },
-            delete: if let Some(ref s) = self.delete {
-                Some(interpolate(s, ctxt)?.into())
-            } else {
-                None
-            },
-            head: if let Some(ref s) = self.head {
-                Some(interpolate(s, ctxt)?.into())
-            } else {
-                None
-            },
-            options: if let Some(ref s) = self.options {
-                Some(interpolate(s, ctxt)?.into())
-            } else {
-                None
-            },
-            connect: if let Some(ref s) = self.connect {
-                Some(interpolate(s, ctxt)?.into())
-            } else {
-                None
-            },
-            patch: if let Some(ref s) = self.patch {
-                Some(interpolate(s, ctxt)?.into())
-            } else {
-                None
-            },
-            trace: if let Some(ref s) = self.trace {
-                Some(interpolate(s, ctxt)?.into())
-            } else {
-                None
-            },
+        Ok(match self {
+            ReqMethod::Get(ref s) => ReqMethod::Get(interpolate(s, ctxt)?),
+            ReqMethod::Post(ref s) => ReqMethod::Post(interpolate(s, ctxt)?),
+            ReqMethod::Put(ref s) => ReqMethod::Put(interpolate(s, ctxt)?),
+            ReqMethod::Delete(ref s) => ReqMethod::Delete(interpolate(s, ctxt)?),
+            ReqMethod::Head(ref s) => ReqMethod::Head(interpolate(s, ctxt)?),
+            ReqMethod::Options(ref s) => ReqMethod::Options(interpolate(s, ctxt)?),
+            ReqMethod::Connect(ref s) => ReqMethod::Connect(interpolate(s, ctxt)?),
+            ReqMethod::Patch(ref s) => ReqMethod::Patch(interpolate(s, ctxt)?),
+            ReqMethod::Trace(ref s) => ReqMethod::Trace(interpolate(s, ctxt)?),
         })
-    }
-}
-
-impl ReqParam {
-    fn into_vec(self) -> Vec<String> {
-        match self {
-            ReqParam::Atom(s) => vec![s],
-            ReqParam::List(v) => v,
-        }
-    }
-
-    fn interpolate(&self, ctxt: &InterpContext) -> InterpResult<Self> {
-        match self {
-            ReqParam::Atom(s) => Ok(ReqParam::Atom(interpolate(s, ctxt)?.to_string())),
-            ReqParam::List(v) => Ok(ReqParam::List(
-                v.iter()
-                    .map(|s| Ok(interpolate(s, ctxt)?.to_string()))
-                    .collect::<InterpResult<_>>()?,
-            )),
-        }
     }
 }
 
@@ -220,8 +192,12 @@ fn interpolate_btree_map(
 ) -> InterpResult<BTreeMap<String, ReqParam>> {
     m.iter()
         .map(|(k, v)| {
-            let k = interpolate(k, ctxt)?.to_string();
-            let v = v.interpolate(ctxt)?;
+            let k = interpolate(k, ctxt)?;
+            let v = ReqParam(
+                v.0.iter()
+                    .map(|s| interpolate(s, ctxt))
+                    .collect::<InterpResult<_>>()?,
+            );
             Ok((k, v))
         })
         .collect::<InterpResult<_>>()
@@ -229,7 +205,7 @@ fn interpolate_btree_map(
 
 fn interpolate_toml_value(val: &toml::Value, ctxt: &InterpContext) -> InterpResult<toml::Value> {
     let v = match val {
-        toml::Value::String(s) => toml::Value::String(interpolate(s, ctxt)?.to_string()),
+        toml::Value::String(s) => toml::Value::String(interpolate(s, ctxt)?),
         toml::Value::Array(a) => toml::Value::Array(
             a.iter()
                 .map(|v| interpolate_toml_value(v, ctxt))
@@ -237,12 +213,7 @@ fn interpolate_toml_value(val: &toml::Value, ctxt: &InterpContext) -> InterpResu
         ),
         toml::Value::Table(t) => toml::Value::Table(
             t.iter()
-                .map(|(k, v)| {
-                    Ok((
-                        interpolate(k, ctxt)?.to_string(),
-                        interpolate_toml_value(v, ctxt)?,
-                    ))
-                })
+                .map(|(k, v)| Ok((interpolate(k, ctxt)?, interpolate_toml_value(v, ctxt)?)))
                 .collect::<InterpResult<_>>()?,
         ),
         _ => val.clone(),
@@ -272,31 +243,50 @@ fn toml_to_json(src: &toml::Value) -> serde_json::Value {
     }
 }
 
+impl From<ReqBodyOpt> for ReqBody {
+    fn from(opt: ReqBodyOpt) -> Self {
+        if let Some(s) = opt.plain {
+            ReqBody::Plain(s)
+        } else if let Some(v) = opt.json {
+            ReqBody::Json(v)
+        } else if let Some(m) = opt.form {
+            ReqBody::Form(m)
+        } else {
+            ReqBody::Plain("".into())
+        }
+    }
+}
+
+impl ReqBodyOpt {
+    fn is_empty(&self) -> bool {
+        self.plain.is_none() && self.json.is_none() && self.form.is_none()
+    }
+
+    fn is_valid(&self) -> bool {
+        let n = vec![
+            self.plain.is_some(),
+            self.json.is_some(),
+            self.form.is_some(),
+        ]
+        .into_iter()
+        .filter(|b| *b)
+        .collect::<Vec<_>>()
+        .len();
+        n < 2
+    }
+}
+
 impl ReqBody {
     fn interpolate(&self, ctxt: &InterpContext) -> InterpResult<Self> {
-        let ReqBody { plain, form, json } = self;
-        let plain = match plain {
-            Some(s) => Some(interpolate(s, ctxt)?.to_string()),
-            None => None,
-        };
-        let form = match form {
-            Some(m) => Some(
+        Ok(match self {
+            ReqBody::Plain(s) => ReqBody::Plain(interpolate(s, ctxt)?),
+            ReqBody::Json(v) => ReqBody::Json(interpolate_toml_value(v, ctxt)?),
+            ReqBody::Form(m) => ReqBody::Form(
                 m.iter()
-                    .map(|(k, v)| {
-                        Ok((
-                            interpolate(k, ctxt)?.to_string(),
-                            interpolate(v, ctxt)?.to_string(),
-                        ))
-                    })
-                    .collect::<InterpResult<BTreeMap<String, String>>>()?,
+                    .map(|(k, v)| Ok((interpolate(k, ctxt)?, interpolate(v, ctxt)?)))
+                    .collect::<InterpResult<_>>()?,
             ),
-            None => None,
-        };
-        let json = match json {
-            Some(v) => Some(interpolate_toml_value(v, ctxt)?),
-            None => None,
-        };
-        Ok(ReqBody { plain, form, json })
+        })
     }
 }
 
@@ -336,24 +326,20 @@ impl ReqTask {
             ))
             .build()?;
         let mut builder = client.request(method, url);
-        let q = self
-            .queries
-            .iter()
-            .map(|(k, v)| (k, v.clone().into_vec()))
-            .collect::<Vec<_>>();
+        let q = self.queries.iter().collect::<Vec<_>>();
         for (k, v) in q.iter() {
-            builder = builder.query(&v.iter().map(|u| (&k, u)).collect::<Vec<_>>());
+            builder = builder.query(&v.0.iter().map(|u| (&k, u)).collect::<Vec<_>>());
         }
-        if let Some(ref s) = self.body.plain {
-            builder = builder.body(s.clone());
-        } else if let Some(ref m) = self.body.form {
-            builder = builder.form(m);
-        } else if let Some(ref v) = self.body.json {
-            builder = builder.json(&toml_to_json(v));
-        }
+
+        builder = match self.body {
+            ReqBody::Plain(ref s) => builder.body(s.clone()),
+            ReqBody::Json(ref v) => builder.json(&toml_to_json(v)),
+            ReqBody::Form(ref m) => builder.form(m),
+        };
+
         for (k, v) in self.headers.iter() {
-            for s in v.clone().into_vec() {
-                builder = builder.header(k, &s);
+            for s in v.0.iter() {
+                builder = builder.header(k, s);
             }
         }
         let result = Ok(builder.send()?);
@@ -383,49 +369,46 @@ fn load_env(values: &BTreeMap<String, String>, config: &ReqConfig) -> BTreeMap<S
     }
 }
 
-impl Req {
-    pub fn get_task(self, name: &Option<String>) -> InterpResult<Option<ReqTask>> {
-        match self {
-            Req::One(ReqOne {
-                method,
-                headers,
-                queries,
-                body,
-                insecure,
-                description,
-                ref values,
-                ref config,
-            }) => {
-                let task = ReqTask {
-                    method,
-                    headers,
-                    queries,
-                    body,
-                    insecure,
-                    description,
-                };
-                let values = load_env(values, config);
-                let ctxt = create_interpolation_context(values)?;
-                let task = task.interpolate(&ctxt)?;
-                Ok(Some(task))
-            }
-            Req::Many(ReqMany {
-                table,
-                ref values,
-                ref config,
-            }) => {
-                let values = load_env(values, config);
-                let ctxt = create_interpolation_context(values)?;
-                let task = match name {
-                    Some(name) => table.get(name),
-                    None => None,
-                };
-                if let Some(task) = task {
-                    Ok(Some(task.interpolate(&ctxt)?))
-                } else {
-                    Ok(None)
-                }
-            }
+impl ReqOne {
+    pub fn to_task(self) -> InterpResult<ReqTask> {
+        let ReqOne {
+            method,
+            headers,
+            queries,
+            body,
+            insecure,
+            description,
+            ref values,
+            ref config,
+        } = self;
+        let task = ReqTask {
+            method,
+            headers,
+            queries,
+            body,
+            insecure,
+            description,
+        };
+        let values = load_env(values, config);
+        let ctxt = create_interpolation_context(values)?;
+        let task = task.interpolate(&ctxt)?;
+        Ok(task)
+    }
+}
+
+impl ReqMany {
+    pub fn get_task(self, name: &str) -> InterpResult<Option<ReqTask>> {
+        let ReqMany {
+            table,
+            ref values,
+            ref config,
+        } = self;
+        let values = load_env(values, config);
+        let ctxt = create_interpolation_context(values)?;
+        if let Some(task) = table.get(name) {
+            Ok(Some(task.interpolate(&ctxt)?))
+        } else {
+            Ok(None)
         }
     }
 }
@@ -433,6 +416,43 @@ impl Req {
 /****************
  * Deseliralzie *
  ****************/
+
+impl<'de> Deserialize<'de> for ReqParam {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct ReqParamVisitor;
+
+        impl<'de> Visitor<'de> for ReqParamVisitor {
+            type Value = ReqParam;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("string or list of string")
+            }
+
+            fn visit_seq<V>(self, mut seq: V) -> Result<ReqParam, V::Error>
+            where
+                V: SeqAccess<'de>,
+            {
+                let mut strings = vec![];
+                while let Some(v) = seq.next_element()? {
+                    strings.push(v);
+                }
+                Ok(ReqParam(strings))
+            }
+            fn visit_str<E>(self, s: &str) -> Result<ReqParam, E>
+            where
+                E: de::Error,
+            {
+                Ok(ReqParam(vec![s.into()]))
+            }
+        }
+
+        deserializer.deserialize_any(ReqParamVisitor)
+    }
+}
+
 impl<'de> Deserialize<'de> for ReqOne {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -481,10 +501,10 @@ impl<'de> Deserialize<'de> for ReqOne {
             where
                 V: MapAccess<'de>,
             {
-                let mut method = ReqMethod::default();
+                let mut method = ReqMethodOpt::default();
                 let mut headers = None;
                 let mut queries = None;
-                let mut body = None;
+                let mut body = ReqBodyOpt::default();
                 let mut insecure = None;
                 let mut description = None;
                 let mut values = None;
@@ -577,10 +597,15 @@ impl<'de> Deserialize<'de> for ReqOne {
                             queries = Some(map.next_value()?);
                         }
                         Field::Body => {
-                            if body.is_some() {
+                            if !body.is_empty() {
                                 return Err(de::Error::duplicate_field("body"));
                             }
-                            body = Some(map.next_value()?);
+                            body = map.next_value()?;
+                            if !body.is_valid() {
+                                return Err(de::Error::custom(
+                                    "field `body` containing too many fields",
+                                ));
+                            }
                         }
                         Field::Insecure => {
                             if insecure.is_some() {
@@ -611,13 +636,10 @@ impl<'de> Deserialize<'de> for ReqOne {
                 if method.is_empty() {
                     return Err(de::Error::custom("missing definition of method and url"));
                 }
+                let method = method.into();
                 let headers = headers.unwrap_or_default();
                 let queries = queries.unwrap_or_default();
-                let body = body.unwrap_or_else(|| ReqBody {
-                    plain: None,
-                    form: None,
-                    json: None,
-                });
+                let body = body.into();
                 let insecure = insecure.unwrap_or_default();
                 let description = description.unwrap_or_default();
                 let values = values.unwrap_or_default();
@@ -702,10 +724,10 @@ impl<'de> Deserialize<'de> for ReqTask {
             where
                 V: MapAccess<'de>,
             {
-                let mut method = ReqMethod::default();
+                let mut method = ReqMethodOpt::default();
                 let mut headers = None;
                 let mut queries = None;
-                let mut body = None;
+                let mut body = ReqBodyOpt::default();
                 let mut insecure = None;
                 let mut description = None;
 
@@ -796,10 +818,15 @@ impl<'de> Deserialize<'de> for ReqTask {
                             queries = Some(map.next_value()?);
                         }
                         Field::Body => {
-                            if body.is_some() {
+                            if !body.is_empty() {
                                 return Err(de::Error::duplicate_field("body"));
                             }
-                            body = Some(map.next_value()?);
+                            body = map.next_value()?;
+                            if !body.is_valid() {
+                                return Err(de::Error::custom(
+                                    "field `body` containing too many fields",
+                                ));
+                            }
                         }
                         Field::Insecure => {
                             if insecure.is_some() {
@@ -818,13 +845,10 @@ impl<'de> Deserialize<'de> for ReqTask {
                 if method.is_empty() {
                     return Err(de::Error::custom("missing definition of method and url"));
                 }
+                let method = method.into();
                 let headers = headers.unwrap_or_default();
                 let queries = queries.unwrap_or_default();
-                let body = body.unwrap_or_else(|| ReqBody {
-                    plain: None,
-                    form: None,
-                    json: None,
-                });
+                let body = body.into();
                 let insecure = insecure.unwrap_or_default();
                 let description = description.unwrap_or_default();
 

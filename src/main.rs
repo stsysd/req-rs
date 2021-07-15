@@ -5,7 +5,7 @@ mod data;
 mod interpolation;
 
 use anyhow::{anyhow, Context};
-use data::Req;
+use data::{ReqMany, ReqOne};
 use std::fs;
 use std::io::{stdout, BufWriter, Write};
 use structopt::StructOpt;
@@ -30,15 +30,23 @@ fn main() -> anyhow::Result<()> {
     let opt = Opt::from_args();
     let input = fs::read_to_string(opt.input.as_str())
         .context(format!("fail to open file: {}", opt.input))?;
-    let req =
-        toml::from_str::<Req>(input.as_str()).context(format!("malformed file: {}", opt.input))?;
-    let task = req
-        .get_task(&opt.name)
-        .context(format!("fail to resolve context: {}", opt.input))?;
-    let task = task.ok_or_else(|| match &opt.name {
-        Some(name) => anyhow!("task `{}` is not defined", name),
-        None => anyhow!("option `name` is required"),
-    })?;
+    let task = match opt.name {
+        Some(ref name) => {
+            let many = toml::from_str::<ReqMany>(input.as_str())
+                .context(format!("malformed file: {}", opt.input))?;
+            if let Some(task) = many.get_task(name).context("fail to resolve context")? {
+                Ok(task)
+            } else {
+                Err(anyhow!("task `{}` is not defined", name))
+            }
+        }
+        None => {
+            let one = toml::from_str::<ReqOne>(input.as_str())
+                .context(format!("malformed file: {}", opt.input))?;
+            one.to_task().context("fail to resolve context")
+        }
+    }?;
+
     if opt.dryrun {
         println!("{:#?}", task);
         return Ok(());
