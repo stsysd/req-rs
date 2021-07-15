@@ -8,7 +8,7 @@ foo = ["$NAME", "bar"]
 POST = 'https://httpbin.org/post'
 
 [req.post.headers]
-Authorization= 'Token ${SECRET_TOKEN}'
+Authorization = 'Token ${SECRET_TOKEN}'
 Content-Type = 'application/json'
 
 [req.post.body.json]
@@ -18,6 +18,3 @@ name = '$NAME'
 GREETING_MESSAGE = 'hello $NAME'
 SECRET_TOKEN = 'default_token'
 NAME = 'hoge'
-
-[env]
-dotenv = true
