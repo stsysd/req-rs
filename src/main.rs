@@ -42,6 +42,9 @@ struct Opt {
     #[structopt(long = "dotenv")]
     dotenv: Option<String>,
 
+    #[structopt(long = "curl")]
+    curl: bool,
+
     #[structopt(long = "dryrun")]
     dryrun: bool,
 }
@@ -81,6 +84,12 @@ fn main() -> anyhow::Result<()> {
         println!("{:#?}", task);
         return Ok(());
     }
+
+    if opt.curl {
+        println!("{}", task.to_curl()?);
+        return Ok(());
+    }
+
     let res = task.send().context("fail to send request")?;
     let out = stdout();
     let mut out = BufWriter::new(out.lock());

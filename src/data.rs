@@ -283,7 +283,9 @@ impl ReqTask {
         })
     }
 
-    pub fn send(&self) -> Result<reqwest::blocking::Response, reqwest::Error> {
+    fn request(
+        &self,
+    ) -> Result<(reqwest::blocking::Client, reqwest::blocking::Request), reqwest::Error> {
         let (method, url) = self.method.method_and_url();
         let client = reqwest::blocking::ClientBuilder::new()
             .danger_accept_invalid_certs(self.insecure)
@@ -310,8 +312,38 @@ impl ReqTask {
                 builder = builder.header(k, s);
             }
         }
-        let result = Ok(builder.send()?);
-        result
+        Ok((client, builder.build()?))
+    }
+
+    pub fn send(&self) -> Result<reqwest::blocking::Response, reqwest::Error> {
+        let (client, request) = self.request()?;
+        client.execute(request)
+    }
+
+    pub fn to_curl(self) -> Result<String, reqwest::Error> {
+        let (_, request) = self.request()?;
+        let mut lines = vec![];
+        lines.push(format!(
+            "curl \"{}\" -X{}",
+            request.url().as_str(),
+            request.method().as_str()
+        ));
+        for (k, v) in request.headers().iter() {
+            let kv = format!("{}:{}", k, v.to_str().expect("invalid header string"))
+                .replace("\\", "\\\\")
+                .replace("\"", "\\\"");
+            lines.push(format!(" \\\n  -H \"{}\"", kv));
+        }
+        if let Some(body) = request.body() {
+            let bytes = body.as_bytes().unwrap();
+            if bytes.len() > 0 {
+                lines.push(" \\\n  -d @- << __REQUEST_BODY__\n".to_string());
+                let body = String::from_utf8(body.as_bytes().unwrap().to_vec()).unwrap();
+                lines.push(body);
+                lines.push("\n__REQUEST_BODY__".to_string());
+            }
+        }
+        Ok(lines.join(""))
     }
 }
 
