@@ -27,14 +27,14 @@ where
 #[derive(Debug, StructOpt)]
 #[structopt(name = "req", about = "send http request")]
 struct Opt {
-    #[structopt(name = "FILE")]
+    #[structopt(long_help = "name of request")]
+    name: Option<String>,
+
+    #[structopt(short="f", long="file", default_value="./req.toml")]
     input: String,
 
     #[structopt(short = "i", long = "include-header")]
     include_header: bool,
-
-    #[structopt(short = "n", long = "name", long_help = "name of request")]
-    name: Option<String>,
 
     #[structopt(short = "V", long = "value",  parse(try_from_str = parse_key_val),)]
     values: Vec<(String, String)>,
