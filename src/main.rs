@@ -39,7 +39,7 @@ struct Opt {
     #[structopt(short = "V", long = "value",  parse(try_from_str = parse_key_val),)]
     values: Vec<(String, String)>,
 
-    #[structopt(long = "dotenv")]
+    #[structopt(long = "env-file")]
     dotenv: Option<String>,
 
     #[structopt(long = "curl")]
