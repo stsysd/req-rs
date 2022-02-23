@@ -61,7 +61,7 @@ pub struct ReqTask {
 }
 
 #[derive(Debug, Deserialize, Clone)]
-pub struct ReqMany {
+pub struct Req {
     #[serde(rename = "req")]
     table: BTreeMap<String, ReqTask>,
 
@@ -336,9 +336,9 @@ impl ReqTask {
     }
 }
 
-impl ReqMany {
+impl Req {
     pub fn get_task(self, name: &str) -> InterpResult<Option<ReqTask>> {
-        let ReqMany { table, values } = self;
+        let Req { table, values } = self;
         let ctxt = create_interpolation_context(values)?;
         if let Some(task) = table.get(name) {
             Ok(Some(task.interpolate(&ctxt)?))
@@ -351,24 +351,24 @@ impl ReqMany {
     where
         I: IntoIterator<Item = (String, String)>,
     {
-        let ReqMany { mut values, .. } = self;
+        let Req { mut values, .. } = self;
         for (k, v) in vals.into_iter() {
             values.insert(k, v);
         }
-        ReqMany { values, ..self }
+        Req { values, ..self }
     }
 
     pub fn with_default<I>(self, vals: I) -> Self
     where
         I: IntoIterator<Item = (String, String)>,
     {
-        let ReqMany { mut values, .. } = self;
+        let Req { mut values, .. } = self;
         for (k, v) in vals.into_iter() {
             if !values.contains_key(&k) {
                 values.insert(k, v);
             }
         }
-        ReqMany { values, ..self }
+        Req { values, ..self }
     }
 }
 
