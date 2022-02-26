@@ -68,7 +68,7 @@ where
 }
 
 #[derive(Debug, Parser)]
-#[clap(name = "req", about = "sending http request tool")]
+#[clap(name = "req", about, version)]
 struct Opt {
     #[clap(long_help = "task name")]
     name: Option<String>,
