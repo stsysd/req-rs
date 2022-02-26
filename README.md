@@ -1,115 +1,95 @@
 req is a http request builder from configuration file.
 
 ## USAGE
+
 ```
-req 0.2.0
+req 0.3.0
 send http request
 
 USAGE:
-    req [FLAGS] [OPTIONS] <FILE>
+    req [FLAGS] [OPTIONS] <name>
 
 FLAGS:
-        --dryrun            
-            
-
-    -h, --help              
-            Prints help information
-
-    -i, --include-header    
-            
-
-        --version           
-            Prints version information
-
+        --curl
+        --dryrun
+    -h, --help              Prints help information
+    -i, --include-header
+        --version           Prints version information
 
 OPTIONS:
-        --dotenv <dotenv>      
-            
-
-    -n, --name <name>          
-            name of request
-
-    -V, --value <values>...    
-            
-
+        --env-file <dotenv>
+    -f, --file <input>          [default: ./req.toml]
+    -V, --var <values>...
 
 ARGS:
-    <FILE>    
+    <name>    task name
 ```
 
 ## Example
 
-### Default Request
-
 ```toml
-GET = 'https://example.com'
+[tasks.get]
+GET = 'https://httpbin.org/get'
+
+[tasks.post]
+POST = 'https://httpbin.org/post'
+
 ```
 
 ```shell
-> req example.toml
-# => GET https://example.com
-```
+> req get
+# => GET https://httpbin.org/get
 
-### Multiple Requests
-```toml
-[req.get]
-GET = 'https://example.com'
-
-[req.post]
-POST = 'https://example.com'
-```
-
-```shell
-> req example.toml --name get
-# => GET https://example.com
-
-> req example.toml --name post
-# => POST https://example.com
+> req post
+# => POST https://httpbin.org/post
 ```
 
 ### With Parameters
+
 ```toml
+[tasks.post]
 POST = 'https://example.com'
 
-[queries]
+[tasks.post.queries]
 foo = 'aaa'
 foos = ['bbb', 'ccc']
 
-[headers]
+[tasks.post.headers]
 accept = 'text/plain'
 authorization = 'Bearer FOOBAR'
 ```
 
 ### With Body
+
 ```toml
 # content-type: text/plain
-[req.with-plain]
+[tasks.with-plain]
 POST = 'https://example.com'
 
-[req.with-plain.body]
+[tasks.with-plain.body]
 plain = '''
 hello req!
 '''
 
 
 # content-type: application/www-x-form-urlencoded
-[req.with-form]
+[tasks.with-form]
 POST = 'https://example.com'
 
-[req.with-form.body.form]
+[tasks.with-form.body.form]
 foo = 'aaa'
 bar = 'bbb'
 
 
 # content-type: application/json
-[req.with-json]
+[tasks.with-json]
 POST = 'https://example.com'
 
-[req.with-json.body.json]
+[tasks.with-json.body.json]
 foo = 'aaa'
 bar = 'bbb'
 
-[req.with-json.body.json.data]
+[tasks.with-json.body.json.data]
 can = ['send', 'structured', { data = true }]
 ```
 
@@ -118,7 +98,7 @@ can = ['send', 'structured', { data = true }]
 ```toml
 GET = 'https://$DOMAIN' # => 'https://example.com'
 
-[values]
+[variables]
 EXAMPLE = 'example'
 DOMAIN = '$EXAMPLE.com' # => 'example.com'
 
@@ -132,11 +112,15 @@ BAZ = 'FOO_BAR is ${FOO_BAR}'
 ```toml
 # FOO=hidden req example.toml BAZ=overwritten
 
-[values]
+[variables]
 FOO = 'default FOO value'
 BAR = 'default BAR value'
 
 foo = 'FOO is ${FOO}' # => 'FOO is default FOO value'
 bar = 'BAR is ${BAR}' # => 'BAR is deault BAR value'
 baz = 'BAZ is ${BAZ}' # => 'BAZ is overwritten'
+```
+
+```
+
 ```

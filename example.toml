@@ -1,20 +1,17 @@
+[tasks.get]
 GET = 'https://httpbin.org/get'
 
-[queries]
-foo = ["$NAME", "bar"]
-
-
-[req.post]
+[tasks.post]
 POST = 'https://httpbin.org/post'
 
-[req.post.headers]
+[tasks.post.headers]
 Authorization = 'Token ${SECRET_TOKEN}'
 Content-Type = 'application/json'
 
-[req.post.body.json]
+[tasks.post.body.json]
 name = '$NAME'
 
-[values]
+[variables]
 GREETING_MESSAGE = 'hello $NAME'
 SECRET_TOKEN = 'default_token'
 NAME = 'hoge'
