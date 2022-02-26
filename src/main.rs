@@ -5,7 +5,7 @@ mod data;
 mod interpolation;
 
 use anyhow::{anyhow, Context};
-use data::{Req};
+use data::Req;
 use std::error::Error;
 use std::fs;
 use std::io::{stdout, BufWriter, Write};
@@ -30,7 +30,7 @@ struct Opt {
     #[structopt(long_help = "name of request")]
     name: String,
 
-    #[structopt(short="f", long="file", default_value="./req.toml")]
+    #[structopt(short = "f", long = "file", default_value = "./req.toml")]
     input: String,
 
     #[structopt(short = "i", long = "include-header")]
@@ -61,10 +61,13 @@ fn main() -> anyhow::Result<()> {
     };
     let input = fs::read_to_string(opt.input.as_str())
         .context(format!("fail to open file: {}", opt.input))?;
-    let many = toml::from_str::<Req>(input.as_str())
-        .context(format!("malformed file: {}", opt.input))?;
+    let many =
+        toml::from_str::<Req>(input.as_str()).context(format!("malformed file: {}", opt.input))?;
     let many = many.with_default(std::env::vars()).with_values(opt.values);
-    let task = if let Some(task) = many.get_task(&opt.name).context("fail to resolve context")? {
+    let task = if let Some(task) = many
+        .get_task(&opt.name)
+        .context("fail to resolve context")?
+    {
         Ok(task)
     } else {
         Err(anyhow!("task `{}` is not defined", opt.name))
