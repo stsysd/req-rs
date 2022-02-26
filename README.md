@@ -3,26 +3,23 @@ req is a http request builder from configuration file.
 ## USAGE
 
 ```
-req 0.3.0
-send http request
+req 0.4.0
+sending http request tool
 
 USAGE:
-    req [FLAGS] [OPTIONS] <name>
-
-FLAGS:
-        --curl
-        --dryrun
-    -h, --help              Prints help information
-    -i, --include-header
-        --version           Prints version information
-
-OPTIONS:
-        --env-file <dotenv>
-    -f, --file <input>          [default: ./req.toml]
-    -V, --var <values>...
+    req [OPTIONS] [NAME]
 
 ARGS:
-    <name>    task name
+    <NAME>    task name
+
+OPTIONS:
+        --curl
+        --dryrun
+        --env-file <DOTENV>
+    -f, --file <INPUT>         [default: ./req.toml]
+    -h, --help                 Print help information
+    -i, --include-header
+    -v, --var <VARIABLES>
 ```
 
 ## Example
@@ -47,14 +44,14 @@ POST = 'https://httpbin.org/post'
 ### With Parameters
 
 ```toml
-[tasks.post]
+[tasks.req]
 POST = 'https://example.com'
 
-[tasks.post.queries]
+[tasks.req.queries]
 foo = 'aaa'
 foos = ['bbb', 'ccc']
 
-[tasks.post.headers]
+[tasks.req.headers]
 accept = 'text/plain'
 authorization = 'Bearer FOOBAR'
 ```
@@ -96,6 +93,7 @@ can = ['send', 'structured', { data = true }]
 ### String Interpolation
 
 ```toml
+[tasks.req]
 GET = 'https://$DOMAIN' # => 'https://example.com'
 
 [variables]
@@ -110,17 +108,17 @@ BAZ = 'FOO_BAR is ${FOO_BAR}'
 ### Environment Variables
 
 ```toml
-# FOO=hidden req example.toml BAZ=overwritten
-
+# FOO=hidden req -v BAZ=overwritten
 [variables]
 FOO = 'default FOO value'
 BAR = 'default BAR value'
+BAZ = 'default BAZ value'
 
+[tasks.req]
+POST = 'https://example.com'
+
+[tasks.req.body.json]
 foo = 'FOO is ${FOO}' # => 'FOO is default FOO value'
-bar = 'BAR is ${BAR}' # => 'BAR is deault BAR value'
+bar = 'BAR is ${BAR}' # => 'BAR is default BAR value'
 baz = 'BAZ is ${BAZ}' # => 'BAZ is overwritten'
-```
-
-```
-
 ```

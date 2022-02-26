@@ -1,6 +1,6 @@
 [package]
 name = "req-rs"
-version = "0.3.1"
+version = "0.4.0"
 authors = ["stsysd <000stsysd000@gmail.com>"]
 edition = "2018"
 description = "http request builder from configuration file"
