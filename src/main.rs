@@ -27,7 +27,7 @@ where
 #[derive(Debug, StructOpt)]
 #[structopt(name = "req", about = "send http request")]
 struct Opt {
-    #[structopt(long_help = "name of request")]
+    #[structopt(long_help = "task name")]
     name: String,
 
     #[structopt(short = "f", long = "file", default_value = "./req.toml")]
@@ -36,8 +36,8 @@ struct Opt {
     #[structopt(short = "i", long = "include-header")]
     include_header: bool,
 
-    #[structopt(short = "V", long = "value",  parse(try_from_str = parse_key_val),)]
-    values: Vec<(String, String)>,
+    #[structopt(short = "V", long = "var",  parse(try_from_str = parse_key_val),)]
+    variables: Vec<(String, String)>,
 
     #[structopt(long = "env-file")]
     dotenv: Option<String>,
@@ -63,7 +63,9 @@ fn main() -> anyhow::Result<()> {
         .context(format!("fail to open file: {}", opt.input))?;
     let many =
         toml::from_str::<Req>(input.as_str()).context(format!("malformed file: {}", opt.input))?;
-    let many = many.with_default(std::env::vars()).with_values(opt.values);
+    let many = many
+        .with_default(std::env::vars())
+        .with_values(opt.variables);
     let task = if let Some(task) = many
         .get_task(&opt.name)
         .context("fail to resolve context")?
