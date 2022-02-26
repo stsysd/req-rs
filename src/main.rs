@@ -5,13 +5,49 @@ mod data;
 mod interpolation;
 
 use anyhow::{anyhow, Context};
+use clap::Parser;
 use data::Req;
 use std::error::Error;
 use std::fs;
 use std::io::{stdout, BufWriter, Write};
-use structopt::StructOpt;
 
-fn parse_key_val<T, U>(s: &str) -> Result<(T, U), Box<dyn Error>>
+#[derive(Debug)]
+enum ParseKVError<T, U>
+where
+    T: std::str::FromStr,
+    U: std::str::FromStr,
+{
+    ParseKeyError(T::Err),
+    ParseValError(U::Err),
+    InvalidFormat(String),
+}
+
+impl<T, U> std::fmt::Display for ParseKVError<T, U>
+where
+    T: std::str::FromStr + std::fmt::Debug,
+    U: std::str::FromStr + std::fmt::Debug,
+    T::Err: Error,
+    U::Err: Error,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            ParseKVError::ParseKeyError(e) => e.fmt(f),
+            ParseKVError::ParseValError(e) => e.fmt(f),
+            ParseKVError::InvalidFormat(ref s) => write!(f, "no `=` found in `{s}`"),
+        }
+    }
+}
+
+impl<T, U> Error for ParseKVError<T, U>
+where
+    T: std::str::FromStr + std::fmt::Debug,
+    U: std::str::FromStr + std::fmt::Debug,
+    T::Err: Error,
+    U::Err: Error,
+{
+}
+
+fn parse_key_val<T, U>(s: &str) -> Result<(T, U), ParseKVError<T, U>>
 where
     T: std::str::FromStr,
     T::Err: Error + 'static,
@@ -20,37 +56,44 @@ where
 {
     let pos = s
         .find('=')
-        .ok_or_else(|| format!("invalid KEY=value: no `=` found in `{}`", s))?;
-    Ok((s[..pos].parse()?, s[pos + 1..].parse()?))
+        .ok_or_else(|| ParseKVError::InvalidFormat(s.to_string()))?;
+    Ok((
+        s[..pos]
+            .parse()
+            .map_err(|e| ParseKVError::ParseKeyError(e))?,
+        s[pos + 1..]
+            .parse()
+            .map_err(|e| ParseKVError::ParseValError(e))?,
+    ))
 }
 
-#[derive(Debug, StructOpt)]
-#[structopt(name = "req", about = "send http request")]
+#[derive(Debug, Parser)]
+#[clap(name = "req", about = "sending http request tool")]
 struct Opt {
-    #[structopt(long_help = "task name")]
+    #[clap(long_help = "task name")]
     name: Option<String>,
 
-    #[structopt(short = "f", long = "file", default_value = "./req.toml")]
+    #[clap(short = 'f', long = "file", default_value = "./req.toml")]
     input: String,
 
-    #[structopt(short = "i", long = "include-header")]
+    #[clap(short, long = "include-header")]
     include_header: bool,
 
-    #[structopt(short = "V", long = "var",  parse(try_from_str = parse_key_val),)]
+    #[clap(short = 'v', long = "var",  parse(try_from_str = parse_key_val),)]
     variables: Vec<(String, String)>,
 
-    #[structopt(long = "env-file")]
+    #[clap(long = "env-file")]
     dotenv: Option<String>,
 
-    #[structopt(long = "curl")]
+    #[clap(long)]
     curl: bool,
 
-    #[structopt(long = "dryrun")]
+    #[clap(long)]
     dryrun: bool,
 }
 
 fn main() -> anyhow::Result<()> {
-    let opt = Opt::from_args();
+    let opt = Opt::parse();
     match opt.dotenv {
         Some(f) => {
             dotenv::from_filename(f)?;
