@@ -369,6 +369,19 @@ impl Req {
         }
         Req { variables, ..self }
     }
+
+    pub fn display_tasks(&self) -> String {
+        let mut strings = vec![];
+        for (k, v) in self.tasks.iter() {
+            let desc = if v.description.len() > 0 {
+                &v.description
+            } else {
+                "<NO DESCRIPTION>"
+            };
+            strings.push(format!("{k}\t{desc}"));
+        }
+        strings.join("\n")
+    }
 }
 
 /****************

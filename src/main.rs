@@ -28,7 +28,7 @@ where
 #[structopt(name = "req", about = "send http request")]
 struct Opt {
     #[structopt(long_help = "task name")]
-    name: String,
+    name: Option<String>,
 
     #[structopt(short = "f", long = "file", default_value = "./req.toml")]
     input: String,
@@ -61,48 +61,50 @@ fn main() -> anyhow::Result<()> {
     };
     let input = fs::read_to_string(opt.input.as_str())
         .context(format!("fail to open file: {}", opt.input))?;
-    let many =
+    let config =
         toml::from_str::<Req>(input.as_str()).context(format!("malformed file: {}", opt.input))?;
-    let many = many
-        .with_default(std::env::vars())
-        .with_values(opt.variables);
-    let task = if let Some(task) = many
-        .get_task(&opt.name)
-        .context("fail to resolve context")?
-    {
-        Ok(task)
-    } else {
-        Err(anyhow!("task `{}` is not defined", opt.name))
-    }?;
-
-    if opt.dryrun {
-        println!("{:#?}", task);
-        return Ok(());
-    }
-
-    if opt.curl {
-        println!("{}", task.to_curl()?);
-        return Ok(());
-    }
-
-    let res = task.send().context("fail to send request")?;
-    let out = stdout();
-    let mut out = BufWriter::new(out.lock());
-    if opt.include_header {
-        let status = res.status();
-        write!(out, "{:?} {}", res.version(), status.as_str())?;
-        if let Some(reason) = status.canonical_reason() {
-            writeln!(out, " {}", reason)?;
+    if let Some(ref name) = opt.name {
+        let config = config
+            .with_default(std::env::vars())
+            .with_values(opt.variables);
+        let task = if let Some(task) = config.get_task(name).context("fail to resolve context")? {
+            Ok(task)
         } else {
+            Err(anyhow!("task `{}` is not defined", name))
+        }?;
+
+        if opt.dryrun {
+            println!("{:#?}", task);
+            return Ok(());
+        }
+
+        if opt.curl {
+            println!("{}", task.to_curl()?);
+            return Ok(());
+        }
+
+        let res = task.send().context("fail to send request")?;
+        let out = stdout();
+        let mut out = BufWriter::new(out.lock());
+        if opt.include_header {
+            let status = res.status();
+            write!(out, "{:?} {}", res.version(), status.as_str())?;
+            if let Some(reason) = status.canonical_reason() {
+                writeln!(out, " {}", reason)?;
+            } else {
+                writeln!(out, "")?;
+            }
+            for (key, val) in res.headers().iter() {
+                write!(out, "{}: ", key)?;
+                out.write(val.as_bytes())?;
+                writeln!(out, "")?;
+            }
             writeln!(out, "")?;
         }
-        for (key, val) in res.headers().iter() {
-            write!(out, "{}: ", key)?;
-            out.write(val.as_bytes())?;
-            writeln!(out, "")?;
-        }
-        writeln!(out, "")?;
+        out.write_all(res.bytes()?.as_ref())?;
+        Ok(())
+    } else {
+        print!("{}", config.display_tasks());
+        Ok(())
     }
-    out.write_all(res.bytes()?.as_ref())?;
-    Ok(())
 }
