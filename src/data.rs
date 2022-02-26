@@ -62,11 +62,10 @@ pub struct ReqTask {
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct Req {
-    #[serde(rename = "req")]
-    table: BTreeMap<String, ReqTask>,
-
-    #[serde(default)]
-    values: BTreeMap<String, String>,
+    #[serde(rename = "tasks", alias = "req")]
+    tasks: BTreeMap<String, ReqTask>,
+    #[serde(alias = "values")]
+    variables: BTreeMap<String, String>,
 }
 
 impl From<ReqMethodOpt> for ReqMethod {
@@ -338,9 +337,9 @@ impl ReqTask {
 
 impl Req {
     pub fn get_task(self, name: &str) -> InterpResult<Option<ReqTask>> {
-        let Req { table, values } = self;
-        let ctxt = create_interpolation_context(values)?;
-        if let Some(task) = table.get(name) {
+        let Req { tasks, variables } = self;
+        let ctxt = create_interpolation_context(variables)?;
+        if let Some(task) = tasks.get(name) {
             Ok(Some(task.interpolate(&ctxt)?))
         } else {
             Ok(None)
@@ -351,24 +350,24 @@ impl Req {
     where
         I: IntoIterator<Item = (String, String)>,
     {
-        let Req { mut values, .. } = self;
+        let Req { mut variables, .. } = self;
         for (k, v) in vals.into_iter() {
-            values.insert(k, v);
+            variables.insert(k, v);
         }
-        Req { values, ..self }
+        Req { variables, ..self }
     }
 
     pub fn with_default<I>(self, vals: I) -> Self
     where
         I: IntoIterator<Item = (String, String)>,
     {
-        let Req { mut values, .. } = self;
+        let Req { mut variables, .. } = self;
         for (k, v) in vals.into_iter() {
-            if !values.contains_key(&k) {
-                values.insert(k, v);
+            if !variables.contains_key(&k) {
+                variables.insert(k, v);
             }
         }
-        Req { values, ..self }
+        Req { variables, ..self }
     }
 }
 
