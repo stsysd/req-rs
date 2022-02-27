@@ -7,9 +7,10 @@ mod interpolation;
 use anyhow::{anyhow, Context};
 use clap::Parser;
 use data::Req;
+use indicatif::{ProgressBar, ProgressStyle};
 use std::error::Error;
 use std::fs;
-use std::io::{stdout, BufWriter, Write};
+use std::io::{stdout, BufWriter, Read, Write};
 
 #[derive(Debug)]
 enum ParseKVError<T, U>
@@ -76,6 +77,9 @@ struct Opt {
     #[clap(short = 'f', long = "file", default_value = "./req.toml")]
     input: String,
 
+    #[clap(short, long = "out")]
+    output: Option<String>,
+
     #[clap(short, long = "include-header")]
     include_header: bool,
 
@@ -126,28 +130,80 @@ fn main() -> anyhow::Result<()> {
             return Ok(());
         }
 
-        let res = task.send().context("fail to send request")?;
-        let out = stdout();
-        let mut out = BufWriter::new(out.lock());
-        if opt.include_header {
-            let status = res.status();
-            write!(out, "{:?} {}", res.version(), status.as_str())?;
-            if let Some(reason) = status.canonical_reason() {
-                writeln!(out, " {}", reason)?;
-            } else {
-                writeln!(out, "")?;
+        let mut res = task.send().context("fail to send request")?;
+        if let Some(ref path) = opt.output {
+            let f = std::fs::File::create(path)?;
+            let mut w = BufWriter::new(f);
+            download(&mut res, &mut w)?;
+            if opt.include_header {
+                print_header(&res)?;
             }
-            for (key, val) in res.headers().iter() {
-                write!(out, "{}: ", key)?;
-                out.write(val.as_bytes())?;
-                writeln!(out, "")?;
+        } else {
+            let mut buf = vec![];
+            download(&mut res, &mut buf)?;
+            if opt.include_header {
+                print_header(&res)?;
             }
-            writeln!(out, "")?;
+            let out = stdout();
+            let mut out = BufWriter::new(out.lock());
+            out.write(&buf)?;
         }
-        out.write_all(res.bytes()?.as_ref())?;
         Ok(())
     } else {
         print!("{}", config.display_tasks());
         Ok(())
     }
+}
+
+fn download<W: Write>(res: &mut reqwest::blocking::Response, w: &mut W) -> anyhow::Result<()> {
+    let mut buf = [0; 64];
+
+    let style = ProgressStyle::default_bar()
+        .template(
+            "{spinner:.green} [{elapsed_precise}] [{bar:.green}] {bytes}/{total_bytes} ({bytes_per_sec})",
+        )
+        .progress_chars("||.");
+    let pb = res.content_length().map(|l| {
+        let pb = ProgressBar::new(l);
+        pb.set_style(style);
+        pb
+    });
+    let mut progress: usize = 0;
+
+    loop {
+        let n = res.read(&mut buf[..])?;
+        if n == 0 {
+            break;
+        }
+        progress += n;
+        if let Some(ref pb) = pb {
+            pb.set_position(progress as u64);
+        }
+        w.write(&buf[..n])?;
+    }
+    if let Some(ref pb) = pb {
+        pb.finish_with_message("downloaded");
+    }
+
+    w.flush()?;
+    Ok(())
+}
+
+fn print_header(res: &reqwest::blocking::Response) -> anyhow::Result<()> {
+    let out = stdout();
+    let mut out = BufWriter::new(out);
+    let status = res.status();
+    write!(out, "{:?} {}", res.version(), status.as_str())?;
+    if let Some(reason) = status.canonical_reason() {
+        writeln!(out, " {}", reason)?;
+    } else {
+        writeln!(out, "")?;
+    }
+    for (key, val) in res.headers().iter() {
+        write!(out, "{}: ", key)?;
+        out.write(val.as_bytes())?;
+        writeln!(out, "")?;
+    }
+    writeln!(out, "")?;
+    Ok(())
 }
