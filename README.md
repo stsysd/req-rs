@@ -3,7 +3,7 @@ req is a http request builder from configuration file.
 ## USAGE
 
 ```
-req 0.4.0
+req 0.4.1
 http request builder from configuration file
 
 USAGE:
