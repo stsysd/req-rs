@@ -282,6 +282,7 @@ impl ReqTask {
                 env!("CARGO_BIN_NAME"),
                 env!("CARGO_PKG_VERSION")
             ))
+            .timeout(None)
             .build()?;
         let mut builder = client.request(method, url);
         let q = self.queries.iter().collect::<Vec<_>>();
