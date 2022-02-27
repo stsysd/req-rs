@@ -4,7 +4,7 @@ req is a http request builder from configuration file.
 
 ```
 req 0.4.0
-sending http request tool
+http request builder from configuration file
 
 USAGE:
     req [OPTIONS] [NAME]
@@ -19,7 +19,9 @@ OPTIONS:
     -f, --file <INPUT>         [default: ./req.toml]
     -h, --help                 Print help information
     -i, --include-header
+    -o, --out <OUTPUT>
     -v, --var <VARIABLES>
+    -V, --version              Print version information
 ```
 
 ## Example
