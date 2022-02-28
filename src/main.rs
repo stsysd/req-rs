@@ -158,31 +158,30 @@ fn main() -> anyhow::Result<()> {
 fn download<W: Write>(res: &mut reqwest::blocking::Response, w: &mut W) -> anyhow::Result<()> {
     let mut buf = [0; 64];
 
-    let style = ProgressStyle::default_bar()
-        .template(
-            "{spinner:.green} [{elapsed_precise}] [{bar:.green}] {bytes}/{total_bytes} ({bytes_per_sec})",
-        )
-        .progress_chars("||.");
-    let pb = res.content_length().map(|l| {
-        let pb = ProgressBar::new(l);
-        pb.set_style(style);
-        pb
-    });
+    let pb = if let Some(len) = res.content_length() {
+        let style = ProgressStyle::default_bar()
+            .template(
+                "{spinner:.green} [{elapsed_precise}] [{bar:.green}] {bytes}/{total_bytes} ({bytes_per_sec})",
+            )
+            .progress_chars("||.");
+        ProgressBar::new(len).with_style(style)
+    } else {
+        let style = ProgressStyle::default_bar()
+            .template("{spinner:.green} [{elapsed_precise}] {bytes} ({bytes_per_sec})")
+            .progress_chars("||.");
+        ProgressBar::new(0).with_style(style)
+    };
     let mut progress: usize = 0;
 
     loop {
         let n = res.read(&mut buf[..])?;
         if n == 0 {
+            pb.abandon();
             break;
         }
         progress += n;
-        if let Some(ref pb) = pb {
-            pb.set_position(progress as u64);
-        }
+        pb.set_position(progress as u64);
         w.write(&buf[..n])?;
-    }
-    if let Some(ref pb) = pb {
-        pb.finish_with_message("downloaded");
     }
 
     w.flush()?;
