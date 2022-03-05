@@ -15,7 +15,6 @@ ARGS:
 OPTIONS:
         --curl
         --dryrun
-        --env-file <DOTENV>
     -f, --file <INPUT>         [default: ./req.toml]
     -h, --help                 Print help information
     -i, --include-header
@@ -105,22 +104,4 @@ DOMAIN = '$EXAMPLE.com' # => 'example.com'
 # names contain non-alnum characters should be surrounded by brackets
 FOO_BAR = 'foo bar'
 BAZ = 'FOO_BAR is ${FOO_BAR}'
-```
-
-### Environment Variables
-
-```toml
-# FOO=hidden req -v BAZ=overwritten
-[variables]
-FOO = 'default FOO value'
-BAR = 'default BAR value'
-BAZ = 'default BAZ value'
-
-[tasks.req]
-POST = 'https://example.com'
-
-[tasks.req.body.json]
-foo = 'FOO is ${FOO}' # => 'FOO is default FOO value'
-bar = 'BAR is ${BAR}' # => 'BAR is default BAR value'
-baz = 'BAZ is ${BAZ}' # => 'BAZ is overwritten'
 ```

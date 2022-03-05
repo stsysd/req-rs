@@ -86,9 +86,6 @@ struct Opt {
     #[clap(short = 'v', long = "var",  parse(try_from_str = parse_key_val),)]
     variables: Vec<(String, String)>,
 
-    #[clap(long = "env-file")]
-    dotenv: Option<String>,
-
     #[clap(long)]
     curl: bool,
 
@@ -98,22 +95,12 @@ struct Opt {
 
 fn main() -> anyhow::Result<()> {
     let opt = Opt::parse();
-    match opt.dotenv {
-        Some(f) => {
-            dotenv::from_filename(f)?;
-        }
-        None => {
-            let _ = dotenv::dotenv();
-        }
-    };
     let input = fs::read_to_string(opt.input.as_str())
         .context(format!("fail to open file: {}", opt.input))?;
     let config =
         toml::from_str::<Req>(input.as_str()).context(format!("malformed file: {}", opt.input))?;
     if let Some(ref name) = opt.name {
-        let config = config
-            .with_default(std::env::vars())
-            .with_values(opt.variables);
+        let config = config.with_values(opt.variables);
         let task = if let Some(task) = config.get_task(name).context("fail to resolve context")? {
             Ok(task)
         } else {
