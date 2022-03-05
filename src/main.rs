@@ -86,9 +86,6 @@ struct Opt {
     #[clap(short = 'v', long = "var",  parse(try_from_str = parse_key_val),)]
     variables: Vec<(String, String)>,
 
-    #[clap(long = "env-file")]
-    dotenv: Option<String>,
-
     #[clap(long)]
     curl: bool,
 
@@ -98,14 +95,6 @@ struct Opt {
 
 fn main() -> anyhow::Result<()> {
     let opt = Opt::parse();
-    match opt.dotenv {
-        Some(f) => {
-            dotenv::from_filename(f)?;
-        }
-        None => {
-            let _ = dotenv::dotenv();
-        }
-    };
     let input = fs::read_to_string(opt.input.as_str())
         .context(format!("fail to open file: {}", opt.input))?;
     let config =
