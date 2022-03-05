@@ -100,9 +100,7 @@ fn main() -> anyhow::Result<()> {
     let config =
         toml::from_str::<Req>(input.as_str()).context(format!("malformed file: {}", opt.input))?;
     if let Some(ref name) = opt.name {
-        let config = config
-            .with_default(std::env::vars())
-            .with_values(opt.variables);
+        let config = config.with_values(opt.variables);
         let task = if let Some(task) = config.get_task(name).context("fail to resolve context")? {
             Ok(task)
         } else {

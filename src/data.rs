@@ -358,19 +358,6 @@ impl Req {
         Req { variables, ..self }
     }
 
-    pub fn with_default<I>(self, vals: I) -> Self
-    where
-        I: IntoIterator<Item = (String, String)>,
-    {
-        let Req { mut variables, .. } = self;
-        for (k, v) in vals.into_iter() {
-            if !variables.contains_key(&k) {
-                variables.insert(k, v);
-            }
-        }
-        Req { variables, ..self }
-    }
-
     pub fn display_tasks(&self) -> String {
         let mut strings = vec![];
         for (k, v) in self.tasks.iter() {
