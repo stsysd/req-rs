@@ -7,7 +7,7 @@ use std::collections::BTreeMap;
 use std::fmt;
 
 #[derive(Debug, Clone, Default)]
-pub struct ReqMethodOpt {
+struct ReqMethodOpt {
     get: Option<String>,
     post: Option<String>,
     put: Option<String>,
@@ -20,7 +20,7 @@ pub struct ReqMethodOpt {
 }
 
 #[derive(Debug, Clone)]
-pub enum ReqMethod {
+enum ReqMethod {
     Get(String),
     Post(String),
     Put(String),
@@ -33,7 +33,7 @@ pub enum ReqMethod {
 }
 
 #[derive(Debug, Deserialize, Clone, Default)]
-pub struct ReqBodyOpt {
+struct ReqBodyOpt {
     plain: Option<String>,
     json: Option<toml::Value>,
     form: Option<BTreeMap<String, String>>,
@@ -41,7 +41,7 @@ pub struct ReqBodyOpt {
 
 #[derive(Debug, Deserialize, Clone)]
 #[serde(from = "ReqBodyOpt")]
-pub enum ReqBody {
+enum ReqBody {
     Plain(String),
     Json(toml::Value),
     Form(BTreeMap<String, String>),
@@ -50,14 +50,22 @@ pub enum ReqBody {
 #[derive(Debug, Clone)]
 struct ReqParam(Vec<String>);
 
+#[derive(Debug, Clone, Deserialize, Default)]
+struct ReqConfig {
+    #[serde(default)]
+    insecure: bool,
+    #[serde(default)]
+    redirect: usize,
+}
+
 #[derive(Debug, Clone)]
 pub struct ReqTask {
     method: ReqMethod,
     headers: BTreeMap<String, ReqParam>,
     queries: BTreeMap<String, ReqParam>,
     body: ReqBody,
-    insecure: bool,
     description: String,
+    config: Option<ReqConfig>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -66,6 +74,7 @@ pub struct Req {
     tasks: BTreeMap<String, ReqTask>,
     #[serde(alias = "values")]
     variables: BTreeMap<String, String>,
+    config: Option<ReqConfig>,
 }
 
 impl From<ReqMethodOpt> for ReqMethod {
@@ -253,8 +262,8 @@ impl ReqTask {
             ref headers,
             ref queries,
             ref body,
-            insecure,
             description,
+            config,
         } = self;
         let method = method.interpolatte(ctxt)?;
         let headers = interpolate_btree_map(headers, ctxt)?;
@@ -266,8 +275,8 @@ impl ReqTask {
             headers,
             queries,
             body,
-            insecure: insecure.clone(),
             description: description.clone(),
+            config: config.clone(),
         })
     }
 
@@ -275,13 +284,21 @@ impl ReqTask {
         &self,
     ) -> Result<(reqwest::blocking::Client, reqwest::blocking::Request), reqwest::Error> {
         let (method, url) = self.method.method_and_url();
+        let config = self.config.clone().unwrap_or_default();
+        eprintln!("{:?}", config);
+        let policy = if config.redirect > 0 {
+            reqwest::redirect::Policy::limited(config.redirect)
+        } else {
+            reqwest::redirect::Policy::none()
+        };
         let client = reqwest::blocking::ClientBuilder::new()
-            .danger_accept_invalid_certs(self.insecure)
+            .danger_accept_invalid_certs(config.insecure)
             .user_agent(format!(
                 "{}/{}",
                 env!("CARGO_BIN_NAME"),
                 env!("CARGO_PKG_VERSION")
             ))
+            .redirect(policy)
             .timeout(None)
             .build()?;
         let mut builder = client.request(method, url);
@@ -338,10 +355,18 @@ impl ReqTask {
 
 impl Req {
     pub fn get_task(self, name: &str) -> InterpResult<Option<ReqTask>> {
-        let Req { tasks, variables } = self;
+        let Req {
+            tasks,
+            variables,
+            config,
+        } = self;
         let ctxt = create_interpolation_context(variables)?;
         if let Some(task) = tasks.get(name) {
-            Ok(Some(task.interpolate(&ctxt)?))
+            let mut task = task.interpolate(&ctxt)?;
+            if task.config.is_none() {
+                task.config = config.clone();
+            }
+            Ok(Some(task))
         } else {
             Ok(None)
         }
@@ -441,8 +466,8 @@ impl<'de> Deserialize<'de> for ReqTask {
             Headers,
             Queries,
             Body,
-            Insecure,
             Description,
+            Config,
         }
 
         struct ReqTaskVisitor;
@@ -462,8 +487,8 @@ impl<'de> Deserialize<'de> for ReqTask {
                 let mut headers = None;
                 let mut queries = None;
                 let mut body = ReqBodyOpt::default();
-                let mut insecure = None;
                 let mut description = None;
+                let mut config = None;
 
                 while let Some(key) = map.next_key()? {
                     match key {
@@ -562,17 +587,17 @@ impl<'de> Deserialize<'de> for ReqTask {
                                 ));
                             }
                         }
-                        Field::Insecure => {
-                            if insecure.is_some() {
-                                return Err(de::Error::duplicate_field("insecure"));
-                            }
-                            insecure = Some(map.next_value()?);
-                        }
                         Field::Description => {
                             if description.is_some() {
                                 return Err(de::Error::duplicate_field("description"));
                             }
                             description = Some(map.next_value()?);
+                        }
+                        Field::Config => {
+                            if config.is_some() {
+                                return Err(de::Error::duplicate_field("config"));
+                            }
+                            config = Some(map.next_value()?);
                         }
                     }
                 }
@@ -583,7 +608,6 @@ impl<'de> Deserialize<'de> for ReqTask {
                 let headers = headers.unwrap_or_default();
                 let queries = queries.unwrap_or_default();
                 let body = body.into();
-                let insecure = insecure.unwrap_or_default();
                 let description = description.unwrap_or_default();
 
                 Ok(ReqTask {
@@ -591,8 +615,8 @@ impl<'de> Deserialize<'de> for ReqTask {
                     headers,
                     queries,
                     body,
-                    insecure,
                     description,
+                    config,
                 })
             }
         }
