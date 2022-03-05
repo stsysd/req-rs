@@ -285,7 +285,6 @@ impl ReqTask {
     ) -> Result<(reqwest::blocking::Client, reqwest::blocking::Request), reqwest::Error> {
         let (method, url) = self.method.method_and_url();
         let config = self.config.clone().unwrap_or_default();
-        eprintln!("{:?}", config);
         let policy = if config.redirect > 0 {
             reqwest::redirect::Policy::limited(config.redirect)
         } else {
