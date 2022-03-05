@@ -328,24 +328,43 @@ impl ReqTask {
     pub fn to_curl(self) -> Result<String, reqwest::Error> {
         let (_, request) = self.request()?;
         let mut lines = vec![];
+
+        let mut flags = vec![];
+        let config = self.config.unwrap_or_default();
+        if config.insecure {
+            flags.push(" -k");
+        }
+        if config.redirect > 0 {
+            flags.push(" -L")
+        }
+
+        lines.push(format!("curl{}", flags.join("")));
         lines.push(format!(
-            "curl \"{}\" -X{}",
+            " \\\n\t-X {} '{}'",
+            request
+                .method()
+                .as_str()
+                .replace("\\", "\\\\")
+                .replace("\'", "\\'"),
             request.url().as_str(),
-            request.method().as_str()
         ));
         for (k, v) in request.headers().iter() {
             let kv = format!("{}:{}", k, v.to_str().expect("invalid header string"))
                 .replace("\\", "\\\\")
-                .replace("\"", "\\\"");
-            lines.push(format!(" \\\n  -H \"{}\"", kv));
+                .replace("'", "\\'");
+            lines.push(format!(" \\\n\t-H '{}'", kv));
         }
         if let Some(body) = request.body() {
             let bytes = body.as_bytes().unwrap();
             if bytes.len() > 0 {
-                lines.push(" \\\n  -d @- << __REQUEST_BODY__\n".to_string());
+                let mut boundary = String::from("REQUEST_BODY");
                 let body = String::from_utf8(body.as_bytes().unwrap().to_vec()).unwrap();
+                while body.contains(&boundary) {
+                    boundary = format!("__{boundary}__");
+                }
+                lines.push(format!(" \\\n\t-d @- << {boundary}\n"));
                 lines.push(body);
-                lines.push("\n__REQUEST_BODY__".to_string());
+                lines.push(format!("\n{boundary}"));
             }
         }
         Ok(lines.join(""))
