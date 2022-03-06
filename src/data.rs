@@ -81,7 +81,7 @@ pub struct ReqTask {
 pub struct Req {
     #[serde(rename = "tasks", alias = "req")]
     tasks: BTreeMap<String, ReqTask>,
-    #[serde(alias = "values")]
+    #[serde(alias = "values", default)]
     variables: BTreeMap<String, String>,
     config: Option<ReqConfig>,
 }
