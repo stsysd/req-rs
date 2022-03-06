@@ -1,6 +1,7 @@
 use crate::interpolation::{
     create_interpolation_context, interpolate, InterpContext, InterpResult,
 };
+use anyhow::Context;
 use reqwest::Method;
 use serde::de::{self, Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
 use std::collections::BTreeMap;
@@ -32,11 +33,18 @@ enum ReqMethod {
     Trace(String),
 }
 
+#[derive(Debug, Clone)]
+enum ReqMultipartValue {
+    Text(String),
+    File(String),
+}
+
 #[derive(Debug, Deserialize, Clone, Default)]
 struct ReqBodyOpt {
     plain: Option<String>,
     json: Option<toml::Value>,
     form: Option<BTreeMap<String, String>>,
+    multipart: Option<BTreeMap<String, ReqMultipartValue>>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -45,6 +53,7 @@ enum ReqBody {
     Plain(String),
     Json(toml::Value),
     Form(BTreeMap<String, String>),
+    Multipart(BTreeMap<String, ReqMultipartValue>),
 }
 
 #[derive(Debug, Clone)]
@@ -216,6 +225,8 @@ impl From<ReqBodyOpt> for ReqBody {
             ReqBody::Json(v)
         } else if let Some(m) = opt.form {
             ReqBody::Form(m)
+        } else if let Some(m) = opt.multipart {
+            ReqBody::Multipart(m)
         } else {
             ReqBody::Plain("".into())
         }
@@ -224,7 +235,10 @@ impl From<ReqBodyOpt> for ReqBody {
 
 impl ReqBodyOpt {
     fn is_empty(&self) -> bool {
-        self.plain.is_none() && self.json.is_none() && self.form.is_none()
+        self.plain.is_none()
+            && self.json.is_none()
+            && self.form.is_none()
+            && self.multipart.is_none()
     }
 
     fn is_valid(&self) -> bool {
@@ -232,6 +246,7 @@ impl ReqBodyOpt {
             self.plain.is_some(),
             self.json.is_some(),
             self.form.is_some(),
+            self.multipart.is_some(),
         ]
         .into_iter()
         .filter(|b| *b)
@@ -249,6 +264,23 @@ impl ReqBody {
             ReqBody::Form(m) => ReqBody::Form(
                 m.iter()
                     .map(|(k, v)| Ok((interpolate(k, ctxt)?, interpolate(v, ctxt)?)))
+                    .collect::<InterpResult<_>>()?,
+            ),
+            ReqBody::Multipart(m) => ReqBody::Multipart(
+                m.iter()
+                    .map(|(k, v)| {
+                        Ok((
+                            interpolate(k, ctxt)?,
+                            match v {
+                                ReqMultipartValue::Text(ref s) => {
+                                    ReqMultipartValue::Text(interpolate(s, ctxt)?)
+                                }
+                                ReqMultipartValue::File(ref p) => {
+                                    ReqMultipartValue::File(interpolate(p, ctxt)?)
+                                }
+                            },
+                        ))
+                    })
                     .collect::<InterpResult<_>>()?,
             ),
         })
@@ -280,9 +312,7 @@ impl ReqTask {
         })
     }
 
-    fn request(
-        &self,
-    ) -> Result<(reqwest::blocking::Client, reqwest::blocking::Request), reqwest::Error> {
+    fn request(&self) -> anyhow::Result<(reqwest::blocking::Client, reqwest::blocking::Request)> {
         let (method, url) = self.method.method_and_url();
         let config = self.config.clone().unwrap_or_default();
         let policy = if config.redirect > 0 {
@@ -310,6 +340,18 @@ impl ReqTask {
             ReqBody::Plain(ref s) => builder.body(s.clone()),
             ReqBody::Json(ref v) => builder.json(&toml_to_json(v)),
             ReqBody::Form(ref m) => builder.form(m),
+            ReqBody::Multipart(ref m) => {
+                let mut form = reqwest::blocking::multipart::Form::new();
+                for (k, v) in m.iter() {
+                    form = match v {
+                        ReqMultipartValue::Text(ref s) => form.text(k.clone(), s.clone()),
+                        ReqMultipartValue::File(ref p) => form
+                            .file(k.clone(), p.clone())
+                            .context(format!("fail to read uploading file: {}", p))?,
+                    }
+                }
+                builder.multipart(form)
+            }
         };
 
         for (k, v) in self.headers.iter() {
@@ -320,12 +362,12 @@ impl ReqTask {
         Ok((client, builder.build()?))
     }
 
-    pub fn send(&self) -> Result<reqwest::blocking::Response, reqwest::Error> {
+    pub fn send(&self) -> anyhow::Result<reqwest::blocking::Response> {
         let (client, request) = self.request()?;
-        client.execute(request)
+        Ok(client.execute(request)?)
     }
 
-    pub fn to_curl(self) -> Result<String, reqwest::Error> {
+    pub fn to_curl(self) -> anyhow::Result<String> {
         let (_, request) = self.request()?;
         let mut lines = vec![];
 
@@ -418,6 +460,51 @@ impl Req {
 /****************
  * Deseliralzie *
  ****************/
+
+impl<'de> Deserialize<'de> for ReqMultipartValue {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct ReqMultipartValueVisitor;
+
+        impl<'de> Visitor<'de> for ReqMultipartValueVisitor {
+            type Value = ReqMultipartValue;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("string or file")
+            }
+
+            fn visit_str<E>(self, s: &str) -> Result<ReqMultipartValue, E>
+            where
+                E: de::Error,
+            {
+                Ok(ReqMultipartValue::Text(s.into()))
+            }
+
+            fn visit_map<V>(self, mut map: V) -> Result<ReqMultipartValue, V::Error>
+            where
+                V: MapAccess<'de>,
+            {
+                let mut val = None;
+                while let Some(ref key) = map.next_key::<String>()? {
+                    if key == "file" {
+                        val = Some(ReqMultipartValue::File(map.next_value()?));
+                    } else {
+                        return Err(de::Error::custom("invalid form of multipart value"));
+                    }
+                }
+                if let Some(val) = val {
+                    Ok(val)
+                } else {
+                    Err(de::Error::custom("invalid form of multipart value"))
+                }
+            }
+        }
+
+        deserializer.deserialize_any(ReqMultipartValueVisitor)
+    }
+}
 
 impl<'de> Deserialize<'de> for ReqParam {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
