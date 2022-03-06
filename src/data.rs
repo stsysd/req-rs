@@ -382,7 +382,7 @@ impl ReqTask {
 
         lines.push(format!("curl{}", flags.join("")));
         lines.push(format!(
-            " \\\n\t-X {} '{}'",
+            " -X {} '{}'",
             request
                 .method()
                 .as_str()
