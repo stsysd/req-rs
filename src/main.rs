@@ -71,25 +71,39 @@ where
 #[derive(Debug, Parser)]
 #[clap(name = "req", about, version)]
 struct Opt {
-    #[clap(long_help = "task name")]
+    #[clap(long_help = "Specify task by name")]
     name: Option<String>,
 
-    #[clap(short = 'f', long = "file", default_value = "./req.toml")]
+    #[clap(
+        short = 'f',
+        long = "file",
+        default_value = "./req.toml",
+        long_help = "Read task config from <filename>"
+    )]
     input: String,
 
-    #[clap(short, long = "out")]
+    #[clap(short, long = "out", long_help = "Write result to <filename>")]
     output: Option<String>,
 
-    #[clap(short, long = "include-header")]
+    #[clap(
+        short,
+        long = "include-header",
+        long_help = "Include response headers in the output"
+    )]
     include_header: bool,
 
-    #[clap(short = 'v', long = "var",  parse(try_from_str = parse_key_val),)]
+    #[clap(
+        short = 'v',
+        long = "var",
+        long_help = "Pass variable like KEY=VALUE",
+        parse(try_from_str = parse_key_val)
+    )]
     variables: Vec<(String, String)>,
 
-    #[clap(long)]
+    #[clap(long, long_help = "Print compatible curl command (experimental)")]
     curl: bool,
 
-    #[clap(long)]
+    #[clap(long, long_help = "Dump taks object without sending request")]
     dryrun: bool,
 }
 
