@@ -71,39 +71,49 @@ where
 #[derive(Debug, Parser)]
 #[clap(name = "req", about, version)]
 struct Opt {
-    #[clap(long_help = "Specify task by name")]
+    #[clap(help = "Specify task by name")]
     name: Option<String>,
 
     #[clap(
+        name = "DEF",
         short = 'f',
         long = "file",
         default_value = "./req.toml",
-        long_help = "Read task config from <filename>"
+        help = "Read task definitions from <DEF>"
     )]
     input: String,
 
-    #[clap(short, long = "out", long_help = "Write result to <filename>")]
+    #[clap(
+        name = "OUTPUT",
+        short,
+        long = "out",
+        help = "Write result to <OUTPUT>"
+    )]
     output: Option<String>,
 
     #[clap(
         short,
         long = "include-header",
-        long_help = "Include response headers in the output"
+        help = "Include response headers in the output"
     )]
     include_header: bool,
 
     #[clap(
+        name = "KEY=VALUE",
         short = 'v',
         long = "var",
-        long_help = "Pass variable like KEY=VALUE",
+        help = "Pass variable in the form KEY=VALUE",
         parse(try_from_str = parse_key_val)
     )]
     variables: Vec<(String, String)>,
 
-    #[clap(long, long_help = "Print compatible curl command (experimental)")]
+    #[clap(long, help = "Print compatible curl command (experimental)")]
     curl: bool,
 
-    #[clap(long, long_help = "Dump taks object without sending request")]
+    #[clap(
+        long,
+        help = "Dump internal structure of specified task without sending request"
+    )]
     dryrun: bool,
 }
 
@@ -111,11 +121,14 @@ fn main() -> anyhow::Result<()> {
     let opt = Opt::parse();
     let input = fs::read_to_string(opt.input.as_str())
         .context(format!("fail to open file: {}", opt.input))?;
-    let config =
+    let definitions =
         toml::from_str::<Req>(input.as_str()).context(format!("malformed file: {}", opt.input))?;
     if let Some(ref name) = opt.name {
-        let config = config.with_values(opt.variables);
-        let task = if let Some(task) = config.get_task(name).context("fail to resolve context")? {
+        let definitions = definitions.with_values(opt.variables);
+        let task = if let Some(task) = definitions
+            .get_task(name)
+            .context("fail to resolve context")?
+        {
             Ok(task)
         } else {
             Err(anyhow!("task `{}` is not defined", name))
@@ -151,7 +164,7 @@ fn main() -> anyhow::Result<()> {
         }
         Ok(())
     } else {
-        print!("{}", config.display_tasks());
+        print!("{}", definitions.display_tasks());
         Ok(())
     }
 }
