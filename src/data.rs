@@ -8,7 +8,7 @@ use std::collections::BTreeMap;
 use std::fmt;
 
 #[derive(Debug, Clone, Default)]
-struct ReqMethodOpt {
+struct ReqTargetOpt {
     get: Option<String>,
     post: Option<String>,
     put: Option<String>,
@@ -21,7 +21,7 @@ struct ReqMethodOpt {
 }
 
 #[derive(Debug, Clone)]
-enum ReqMethod {
+enum ReqTarget {
     Get(String),
     Post(String),
     Put(String),
@@ -69,7 +69,7 @@ struct ReqConfig {
 
 #[derive(Debug, Clone)]
 pub struct ReqTask {
-    method: ReqMethod,
+    method: ReqTarget,
     headers: BTreeMap<String, ReqParam>,
     queries: BTreeMap<String, ReqParam>,
     body: ReqBody,
@@ -86,33 +86,33 @@ pub struct Req {
     config: Option<ReqConfig>,
 }
 
-impl From<ReqMethodOpt> for ReqMethod {
-    fn from(opt: ReqMethodOpt) -> Self {
+impl From<ReqTargetOpt> for ReqTarget {
+    fn from(opt: ReqTargetOpt) -> Self {
         if let Some(s) = opt.get {
-            ReqMethod::Get(s)
+            ReqTarget::Get(s)
         } else if let Some(s) = opt.post {
-            ReqMethod::Post(s)
+            ReqTarget::Post(s)
         } else if let Some(s) = opt.put {
-            ReqMethod::Put(s)
+            ReqTarget::Put(s)
         } else if let Some(s) = opt.delete {
-            ReqMethod::Delete(s)
+            ReqTarget::Delete(s)
         } else if let Some(s) = opt.head {
-            ReqMethod::Head(s)
+            ReqTarget::Head(s)
         } else if let Some(s) = opt.options {
-            ReqMethod::Options(s)
+            ReqTarget::Options(s)
         } else if let Some(s) = opt.connect {
-            ReqMethod::Connect(s)
+            ReqTarget::Connect(s)
         } else if let Some(s) = opt.patch {
-            ReqMethod::Patch(s)
+            ReqTarget::Patch(s)
         } else if let Some(s) = opt.trace {
-            ReqMethod::Trace(s)
+            ReqTarget::Trace(s)
         } else {
             panic!();
         }
     }
 }
 
-impl ReqMethodOpt {
+impl ReqTargetOpt {
     fn is_empty(&self) -> bool {
         vec![
             &self.get,
@@ -130,32 +130,32 @@ impl ReqMethodOpt {
     }
 }
 
-impl ReqMethod {
+impl ReqTarget {
     fn method_and_url(&self) -> (Method, &str) {
         match self {
-            ReqMethod::Get(ref s) => (Method::GET, s),
-            ReqMethod::Post(ref s) => (Method::POST, s),
-            ReqMethod::Put(ref s) => (Method::PUT, s),
-            ReqMethod::Delete(ref s) => (Method::DELETE, s),
-            ReqMethod::Head(ref s) => (Method::HEAD, s),
-            ReqMethod::Options(ref s) => (Method::OPTIONS, s),
-            ReqMethod::Connect(ref s) => (Method::CONNECT, s),
-            ReqMethod::Patch(ref s) => (Method::PATCH, s),
-            ReqMethod::Trace(ref s) => (Method::TRACE, s),
+            ReqTarget::Get(ref s) => (Method::GET, s),
+            ReqTarget::Post(ref s) => (Method::POST, s),
+            ReqTarget::Put(ref s) => (Method::PUT, s),
+            ReqTarget::Delete(ref s) => (Method::DELETE, s),
+            ReqTarget::Head(ref s) => (Method::HEAD, s),
+            ReqTarget::Options(ref s) => (Method::OPTIONS, s),
+            ReqTarget::Connect(ref s) => (Method::CONNECT, s),
+            ReqTarget::Patch(ref s) => (Method::PATCH, s),
+            ReqTarget::Trace(ref s) => (Method::TRACE, s),
         }
     }
 
     fn interpolate(&self, ctx: &InterpolationContext) -> InterpolationResult<Self> {
         Ok(match self {
-            ReqMethod::Get(ref s) => ReqMethod::Get(interpolate(s, ctx)?),
-            ReqMethod::Post(ref s) => ReqMethod::Post(interpolate(s, ctx)?),
-            ReqMethod::Put(ref s) => ReqMethod::Put(interpolate(s, ctx)?),
-            ReqMethod::Delete(ref s) => ReqMethod::Delete(interpolate(s, ctx)?),
-            ReqMethod::Head(ref s) => ReqMethod::Head(interpolate(s, ctx)?),
-            ReqMethod::Options(ref s) => ReqMethod::Options(interpolate(s, ctx)?),
-            ReqMethod::Connect(ref s) => ReqMethod::Connect(interpolate(s, ctx)?),
-            ReqMethod::Patch(ref s) => ReqMethod::Patch(interpolate(s, ctx)?),
-            ReqMethod::Trace(ref s) => ReqMethod::Trace(interpolate(s, ctx)?),
+            ReqTarget::Get(ref s) => ReqTarget::Get(interpolate(s, ctx)?),
+            ReqTarget::Post(ref s) => ReqTarget::Post(interpolate(s, ctx)?),
+            ReqTarget::Put(ref s) => ReqTarget::Put(interpolate(s, ctx)?),
+            ReqTarget::Delete(ref s) => ReqTarget::Delete(interpolate(s, ctx)?),
+            ReqTarget::Head(ref s) => ReqTarget::Head(interpolate(s, ctx)?),
+            ReqTarget::Options(ref s) => ReqTarget::Options(interpolate(s, ctx)?),
+            ReqTarget::Connect(ref s) => ReqTarget::Connect(interpolate(s, ctx)?),
+            ReqTarget::Patch(ref s) => ReqTarget::Patch(interpolate(s, ctx)?),
+            ReqTarget::Trace(ref s) => ReqTarget::Trace(interpolate(s, ctx)?),
         })
     }
 }
@@ -591,7 +591,7 @@ impl<'de> Deserialize<'de> for ReqTask {
             where
                 V: MapAccess<'de>,
             {
-                let mut method = ReqMethodOpt::default();
+                let mut method = ReqTargetOpt::default();
                 let mut headers = None;
                 let mut queries = None;
                 let mut body = ReqBodyOpt::default();
