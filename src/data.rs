@@ -83,7 +83,8 @@ pub struct Req {
     tasks: BTreeMap<String, ReqTask>,
     #[serde(alias = "values", default)]
     variables: BTreeMap<String, String>,
-    config: Option<ReqConfig>,
+    #[serde(default)]
+    config: ReqConfig,
 }
 
 impl From<ReqTargetOpt> for ReqTarget {
@@ -426,9 +427,7 @@ impl Req {
         let ctx = create_interpolation_context(variables)?;
         if let Some(task) = tasks.get(name) {
             let mut task = task.interpolate(&ctx)?;
-            if task.config.is_none() {
-                task.config = config.clone();
-            }
+            task.config = Some(config);
             Ok(Some(task))
         } else {
             Ok(None)
@@ -717,6 +716,7 @@ impl<'de> Deserialize<'de> for ReqTask {
                 let queries = queries.unwrap_or_default();
                 let body = body.into();
                 let description = description.unwrap_or_default();
+                let config = config.unwrap_or_default();
 
                 Ok(ReqTask {
                     method,
