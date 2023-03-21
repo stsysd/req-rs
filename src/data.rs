@@ -458,7 +458,7 @@ impl Req {
 }
 
 /****************
- * Deseliralzie *
+ * Deserialize *
  ****************/
 
 impl<'de> Deserialize<'de> for ReqMultipartValue {
