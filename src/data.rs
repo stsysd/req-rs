@@ -145,7 +145,7 @@ impl ReqMethod {
         }
     }
 
-    fn interpolatte(&self, ctxt: &InterpContext) -> InterpResult<Self> {
+    fn interpolate(&self, ctxt: &InterpContext) -> InterpResult<Self> {
         Ok(match self {
             ReqMethod::Get(ref s) => ReqMethod::Get(interpolate(s, ctxt)?),
             ReqMethod::Post(ref s) => ReqMethod::Post(interpolate(s, ctxt)?),
@@ -297,7 +297,7 @@ impl ReqTask {
             description,
             config,
         } = self;
-        let method = method.interpolatte(ctxt)?;
+        let method = method.interpolate(ctxt)?;
         let headers = interpolate_btree_map(headers, ctxt)?;
         let queries = interpolate_btree_map(queries, ctxt)?;
         let body = body.interpolate(ctxt)?;
