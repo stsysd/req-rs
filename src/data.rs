@@ -1,5 +1,5 @@
 use crate::interpolation::{
-    create_interpolation_context, interpolate, InterpContext, InterpResult,
+    create_interpolation_context, interpolate, InterpolationContext, InterpolationResult,
 };
 use anyhow::Context;
 use reqwest::Method;
@@ -145,50 +145,53 @@ impl ReqMethod {
         }
     }
 
-    fn interpolate(&self, ctxt: &InterpContext) -> InterpResult<Self> {
+    fn interpolate(&self, ctx: &InterpolationContext) -> InterpolationResult<Self> {
         Ok(match self {
-            ReqMethod::Get(ref s) => ReqMethod::Get(interpolate(s, ctxt)?),
-            ReqMethod::Post(ref s) => ReqMethod::Post(interpolate(s, ctxt)?),
-            ReqMethod::Put(ref s) => ReqMethod::Put(interpolate(s, ctxt)?),
-            ReqMethod::Delete(ref s) => ReqMethod::Delete(interpolate(s, ctxt)?),
-            ReqMethod::Head(ref s) => ReqMethod::Head(interpolate(s, ctxt)?),
-            ReqMethod::Options(ref s) => ReqMethod::Options(interpolate(s, ctxt)?),
-            ReqMethod::Connect(ref s) => ReqMethod::Connect(interpolate(s, ctxt)?),
-            ReqMethod::Patch(ref s) => ReqMethod::Patch(interpolate(s, ctxt)?),
-            ReqMethod::Trace(ref s) => ReqMethod::Trace(interpolate(s, ctxt)?),
+            ReqMethod::Get(ref s) => ReqMethod::Get(interpolate(s, ctx)?),
+            ReqMethod::Post(ref s) => ReqMethod::Post(interpolate(s, ctx)?),
+            ReqMethod::Put(ref s) => ReqMethod::Put(interpolate(s, ctx)?),
+            ReqMethod::Delete(ref s) => ReqMethod::Delete(interpolate(s, ctx)?),
+            ReqMethod::Head(ref s) => ReqMethod::Head(interpolate(s, ctx)?),
+            ReqMethod::Options(ref s) => ReqMethod::Options(interpolate(s, ctx)?),
+            ReqMethod::Connect(ref s) => ReqMethod::Connect(interpolate(s, ctx)?),
+            ReqMethod::Patch(ref s) => ReqMethod::Patch(interpolate(s, ctx)?),
+            ReqMethod::Trace(ref s) => ReqMethod::Trace(interpolate(s, ctx)?),
         })
     }
 }
 
 fn interpolate_btree_map(
     m: &BTreeMap<String, ReqParam>,
-    ctxt: &InterpContext,
-) -> InterpResult<BTreeMap<String, ReqParam>> {
+    ctx: &InterpolationContext,
+) -> InterpolationResult<BTreeMap<String, ReqParam>> {
     m.iter()
         .map(|(k, v)| {
-            let k = interpolate(k, ctxt)?;
+            let k = interpolate(k, ctx)?;
             let v = ReqParam(
                 v.0.iter()
-                    .map(|s| interpolate(s, ctxt))
-                    .collect::<InterpResult<_>>()?,
+                    .map(|s| interpolate(s, ctx))
+                    .collect::<InterpolationResult<_>>()?,
             );
             Ok((k, v))
         })
-        .collect::<InterpResult<_>>()
+        .collect::<InterpolationResult<_>>()
 }
 
-fn interpolate_toml_value(val: &toml::Value, ctxt: &InterpContext) -> InterpResult<toml::Value> {
+fn interpolate_toml_value(
+    val: &toml::Value,
+    ctx: &InterpolationContext,
+) -> InterpolationResult<toml::Value> {
     let v = match val {
-        toml::Value::String(s) => toml::Value::String(interpolate(s, ctxt)?),
+        toml::Value::String(s) => toml::Value::String(interpolate(s, ctx)?),
         toml::Value::Array(a) => toml::Value::Array(
             a.iter()
-                .map(|v| interpolate_toml_value(v, ctxt))
-                .collect::<InterpResult<_>>()?,
+                .map(|v| interpolate_toml_value(v, ctx))
+                .collect::<InterpolationResult<_>>()?,
         ),
         toml::Value::Table(t) => toml::Value::Table(
             t.iter()
-                .map(|(k, v)| Ok((interpolate(k, ctxt)?, interpolate_toml_value(v, ctxt)?)))
-                .collect::<InterpResult<_>>()?,
+                .map(|(k, v)| Ok((interpolate(k, ctx)?, interpolate_toml_value(v, ctx)?)))
+                .collect::<InterpolationResult<_>>()?,
         ),
         _ => val.clone(),
     };
@@ -257,38 +260,38 @@ impl ReqBodyOpt {
 }
 
 impl ReqBody {
-    fn interpolate(&self, ctxt: &InterpContext) -> InterpResult<Self> {
+    fn interpolate(&self, ctx: &InterpolationContext) -> InterpolationResult<Self> {
         Ok(match self {
-            ReqBody::Plain(s) => ReqBody::Plain(interpolate(s, ctxt)?),
-            ReqBody::Json(v) => ReqBody::Json(interpolate_toml_value(v, ctxt)?),
+            ReqBody::Plain(s) => ReqBody::Plain(interpolate(s, ctx)?),
+            ReqBody::Json(v) => ReqBody::Json(interpolate_toml_value(v, ctx)?),
             ReqBody::Form(m) => ReqBody::Form(
                 m.iter()
-                    .map(|(k, v)| Ok((interpolate(k, ctxt)?, interpolate(v, ctxt)?)))
-                    .collect::<InterpResult<_>>()?,
+                    .map(|(k, v)| Ok((interpolate(k, ctx)?, interpolate(v, ctx)?)))
+                    .collect::<InterpolationResult<_>>()?,
             ),
             ReqBody::Multipart(m) => ReqBody::Multipart(
                 m.iter()
                     .map(|(k, v)| {
                         Ok((
-                            interpolate(k, ctxt)?,
+                            interpolate(k, ctx)?,
                             match v {
                                 ReqMultipartValue::Text(ref s) => {
-                                    ReqMultipartValue::Text(interpolate(s, ctxt)?)
+                                    ReqMultipartValue::Text(interpolate(s, ctx)?)
                                 }
                                 ReqMultipartValue::File(ref p) => {
-                                    ReqMultipartValue::File(interpolate(p, ctxt)?)
+                                    ReqMultipartValue::File(interpolate(p, ctx)?)
                                 }
                             },
                         ))
                     })
-                    .collect::<InterpResult<_>>()?,
+                    .collect::<InterpolationResult<_>>()?,
             ),
         })
     }
 }
 
 impl ReqTask {
-    fn interpolate(&self, ctxt: &InterpContext) -> InterpResult<ReqTask> {
+    fn interpolate(&self, ctx: &InterpolationContext) -> InterpolationResult<ReqTask> {
         let ReqTask {
             ref method,
             ref headers,
@@ -297,10 +300,10 @@ impl ReqTask {
             description,
             config,
         } = self;
-        let method = method.interpolate(ctxt)?;
-        let headers = interpolate_btree_map(headers, ctxt)?;
-        let queries = interpolate_btree_map(queries, ctxt)?;
-        let body = body.interpolate(ctxt)?;
+        let method = method.interpolate(ctx)?;
+        let headers = interpolate_btree_map(headers, ctx)?;
+        let queries = interpolate_btree_map(queries, ctx)?;
+        let body = body.interpolate(ctx)?;
 
         Ok(ReqTask {
             method,
@@ -414,15 +417,15 @@ impl ReqTask {
 }
 
 impl Req {
-    pub fn get_task(self, name: &str) -> InterpResult<Option<ReqTask>> {
+    pub fn get_task(self, name: &str) -> InterpolationResult<Option<ReqTask>> {
         let Req {
             tasks,
             variables,
             config,
         } = self;
-        let ctxt = create_interpolation_context(variables)?;
+        let ctx = create_interpolation_context(variables)?;
         if let Some(task) = tasks.get(name) {
-            let mut task = task.interpolate(&ctxt)?;
+            let mut task = task.interpolate(&ctx)?;
             if task.config.is_none() {
                 task.config = config.clone();
             }
