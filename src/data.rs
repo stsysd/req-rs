@@ -4,11 +4,10 @@ use crate::interpolation::{
 use anyhow::Context;
 use reqwest::Method;
 use schemars::{schema_for, JsonSchema};
-use serde::de::{self, Deserialize, Deserializer, MapAccess, Visitor};
 use std::collections::BTreeMap;
-use std::fmt;
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Deserialize, Clone, Default)]
+#[serde(rename_all = "UPPERCASE")]
 struct ReqTargetOpt {
     get: Option<String>,
     post: Option<String>,
@@ -21,7 +20,8 @@ struct ReqTargetOpt {
     trace: Option<String>,
 }
 
-#[derive(Debug, Clone, JsonSchema)]
+#[derive(Debug, Deserialize, Clone, JsonSchema)]
+#[serde(from = "ReqTargetOpt")]
 enum ReqTarget {
     Get(String),
     Post(String),
@@ -34,7 +34,7 @@ enum ReqTarget {
     Trace(String),
 }
 
-#[derive(Debug, Clone, JsonSchema)]
+#[derive(Debug, Deserialize, Clone, JsonSchema)]
 enum ReqMultipartValue {
     Text(String),
     File(String),
@@ -64,7 +64,7 @@ enum ReqParam {
     Multiple(Vec<String>),
 }
 
-#[derive(Debug, Clone, Deserialize, Default, JsonSchema)]
+#[derive(Debug, Deserialize, Clone, Default, JsonSchema)]
 struct ReqConfig {
     #[serde(default)]
     insecure: bool,
@@ -72,9 +72,11 @@ struct ReqConfig {
     redirect: usize,
 }
 
-#[derive(Debug, Clone, JsonSchema)]
+#[derive(Debug, Deserialize, Clone, JsonSchema)]
 pub struct ReqTask {
+    #[serde(flatten)]
     method: ReqTarget,
+
     headers: BTreeMap<String, ReqParam>,
     queries: BTreeMap<String, ReqParam>,
     body: ReqBody,
@@ -115,24 +117,6 @@ impl From<ReqTargetOpt> for ReqTarget {
         } else {
             panic!();
         }
-    }
-}
-
-impl ReqTargetOpt {
-    fn is_empty(&self) -> bool {
-        vec![
-            &self.get,
-            &self.post,
-            &self.put,
-            &self.delete,
-            &self.head,
-            &self.options,
-            &self.connect,
-            &self.patch,
-            &self.trace,
-        ]
-        .iter()
-        .all(|x| x.is_none())
     }
 }
 
@@ -226,29 +210,6 @@ impl From<ReqBodyOpt> for ReqBody {
         } else {
             ReqBody::Plain("".into())
         }
-    }
-}
-
-impl ReqBodyOpt {
-    fn is_empty(&self) -> bool {
-        self.plain.is_none()
-            && self.json.is_none()
-            && self.form.is_none()
-            && self.multipart.is_none()
-    }
-
-    fn is_valid(&self) -> bool {
-        let n = vec![
-            self.plain.is_some(),
-            self.json.is_some(),
-            self.form.is_some(),
-            self.multipart.is_some(),
-        ]
-        .into_iter()
-        .filter(|b| *b)
-        .collect::<Vec<_>>()
-        .len();
-        n < 2
     }
 }
 
@@ -453,259 +414,5 @@ impl Req {
             strings.push(format!("{k}\t{desc}"));
         }
         strings.join("\n")
-    }
-}
-
-/****************
- * Deserialize *
- ****************/
-
-impl<'de> Deserialize<'de> for ReqMultipartValue {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        struct ReqMultipartValueVisitor;
-
-        impl<'de> Visitor<'de> for ReqMultipartValueVisitor {
-            type Value = ReqMultipartValue;
-
-            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                formatter.write_str("string or file")
-            }
-
-            fn visit_str<E>(self, s: &str) -> Result<ReqMultipartValue, E>
-            where
-                E: de::Error,
-            {
-                Ok(ReqMultipartValue::Text(s.into()))
-            }
-
-            fn visit_map<V>(self, mut map: V) -> Result<ReqMultipartValue, V::Error>
-            where
-                V: MapAccess<'de>,
-            {
-                let mut val = None;
-                while let Some(ref key) = map.next_key::<String>()? {
-                    if key == "file" {
-                        val = Some(ReqMultipartValue::File(map.next_value()?));
-                    } else {
-                        return Err(de::Error::custom("invalid form of multipart value"));
-                    }
-                }
-                if let Some(val) = val {
-                    Ok(val)
-                } else {
-                    Err(de::Error::custom("invalid form of multipart value"))
-                }
-            }
-        }
-
-        deserializer.deserialize_any(ReqMultipartValueVisitor)
-    }
-}
-
-impl<'de> Deserialize<'de> for ReqTask {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        #[derive(Deserialize)]
-        #[serde(field_identifier, rename_all = "lowercase")]
-        enum Field {
-            #[serde(rename = "GET")]
-            Get,
-            #[serde(rename = "POST")]
-            Post,
-            #[serde(rename = "PUT")]
-            Put,
-            #[serde(rename = "DELETE")]
-            Delete,
-            #[serde(rename = "HEAD")]
-            Head,
-            #[serde(rename = "OPTIONS")]
-            Options,
-            #[serde(rename = "CONNECT")]
-            Connect,
-            #[serde(rename = "PATCH")]
-            Patch,
-            #[serde(rename = "TRACE")]
-            Trace,
-            Headers,
-            Queries,
-            Body,
-            Description,
-            Config,
-        }
-
-        struct ReqTaskVisitor;
-
-        impl<'de> Visitor<'de> for ReqTaskVisitor {
-            type Value = ReqTask;
-
-            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                formatter.write_str("struct ReqTask")
-            }
-
-            fn visit_map<V>(self, mut map: V) -> Result<ReqTask, V::Error>
-            where
-                V: MapAccess<'de>,
-            {
-                let mut method = ReqTargetOpt::default();
-                let mut headers = None;
-                let mut queries = None;
-                let mut body = ReqBodyOpt::default();
-                let mut description = None;
-                let mut config = None;
-
-                while let Some(key) = map.next_key()? {
-                    match key {
-                        Field::Get => {
-                            if !method.is_empty() {
-                                return Err(de::Error::custom(
-                                    "duplicate definition of method and url",
-                                ));
-                            }
-                            method.get = Some(map.next_value()?);
-                        }
-                        Field::Post => {
-                            if !method.is_empty() {
-                                return Err(de::Error::custom(
-                                    "duplicate definition of method and url",
-                                ));
-                            }
-                            method.post = Some(map.next_value()?);
-                        }
-                        Field::Put => {
-                            if !method.is_empty() {
-                                return Err(de::Error::custom(
-                                    "duplicate definition of method and url",
-                                ));
-                            }
-                            method.put = Some(map.next_value()?);
-                        }
-                        Field::Delete => {
-                            if !method.is_empty() {
-                                return Err(de::Error::custom(
-                                    "duplicate definition of method and url",
-                                ));
-                            }
-                            method.delete = Some(map.next_value()?);
-                        }
-                        Field::Head => {
-                            if !method.is_empty() {
-                                return Err(de::Error::custom(
-                                    "duplicate definition of method and url",
-                                ));
-                            }
-                            method.head = Some(map.next_value()?);
-                        }
-                        Field::Options => {
-                            if !method.is_empty() {
-                                return Err(de::Error::custom(
-                                    "duplicate definition of method and url",
-                                ));
-                            }
-                            method.options = Some(map.next_value()?);
-                        }
-                        Field::Connect => {
-                            if !method.is_empty() {
-                                return Err(de::Error::custom(
-                                    "duplicate definition of method and url",
-                                ));
-                            }
-                            method.connect = Some(map.next_value()?);
-                        }
-                        Field::Patch => {
-                            if !method.is_empty() {
-                                return Err(de::Error::custom(
-                                    "duplicate definition of method and url",
-                                ));
-                            }
-                            method.patch = Some(map.next_value()?);
-                        }
-                        Field::Trace => {
-                            if !method.is_empty() {
-                                return Err(de::Error::custom(
-                                    "duplicate definition of method and url",
-                                ));
-                            }
-                            method.trace = Some(map.next_value()?);
-                        }
-                        Field::Headers => {
-                            if headers.is_some() {
-                                return Err(de::Error::duplicate_field("headers"));
-                            }
-                            headers = Some(map.next_value()?);
-                        }
-                        Field::Queries => {
-                            if queries.is_some() {
-                                return Err(de::Error::duplicate_field("queries"));
-                            }
-                            queries = Some(map.next_value()?);
-                        }
-                        Field::Body => {
-                            if !body.is_empty() {
-                                return Err(de::Error::duplicate_field("body"));
-                            }
-                            body = map.next_value()?;
-                            if !body.is_valid() {
-                                return Err(de::Error::custom(
-                                    "field `body` containing too many fields",
-                                ));
-                            }
-                        }
-                        Field::Description => {
-                            if description.is_some() {
-                                return Err(de::Error::duplicate_field("description"));
-                            }
-                            description = Some(map.next_value()?);
-                        }
-                        Field::Config => {
-                            if config.is_some() {
-                                return Err(de::Error::duplicate_field("config"));
-                            }
-                            config = Some(map.next_value()?);
-                        }
-                    }
-                }
-                if method.is_empty() {
-                    return Err(de::Error::custom("missing definition of method and url"));
-                }
-                let method = method.into();
-                let headers = headers.unwrap_or_default();
-                let queries = queries.unwrap_or_default();
-                let body = body.into();
-                let description = description.unwrap_or_default();
-                let config = config.unwrap_or_default();
-
-                Ok(ReqTask {
-                    method,
-                    headers,
-                    queries,
-                    body,
-                    description,
-                    config,
-                })
-            }
-        }
-
-        const FIELDS: &'static [&'static str] = &[
-            "get",
-            "post",
-            "put",
-            "delete",
-            "head",
-            "options",
-            "connect",
-            "patch",
-            "trace",
-            "headers",
-            "queries",
-            "body",
-            "insecure",
-            "description",
-        ];
-        deserializer.deserialize_struct("ReqTask", FIELDS, ReqTaskVisitor)
     }
 }
