@@ -5,6 +5,7 @@
     "dryrun",
     "indicatif",
     "reqwest",
+    "schemars",
     "vals"
   ]
 }
