@@ -3,7 +3,7 @@ use crate::interpolation::{
 };
 use anyhow::Context;
 use reqwest::Method;
-use serde::de::{self, Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
+use serde::de::{self, Deserialize, Deserializer, MapAccess, Visitor};
 use std::collections::BTreeMap;
 use std::fmt;
 
@@ -56,8 +56,11 @@ enum ReqBody {
     Multipart(BTreeMap<String, ReqMultipartValue>),
 }
 
-#[derive(Debug, Clone)]
-struct ReqParam(Vec<String>);
+#[serde(untagged)]
+enum ReqParam {
+    Single(String),
+    Multiple(Vec<String>),
+}
 
 #[derive(Debug, Clone, Deserialize, Default)]
 struct ReqConfig {
@@ -168,8 +171,8 @@ fn interpolate_btree_map(
     m.iter()
         .map(|(k, v)| {
             let k = interpolate(k, ctx)?;
-            let v = ReqParam(
-                v.0.iter()
+            let v = ReqParam::Multiple(
+                v.iter()
                     .map(|s| interpolate(s, ctx))
                     .collect::<InterpolationResult<_>>()?,
             );
@@ -197,6 +200,15 @@ fn interpolate_json_value(
         _ => val.clone(),
     };
     Ok(v)
+}
+
+impl<'a> ReqParam {
+    fn iter(&'a self) -> Box<dyn Iterator<Item = &'a str> + 'a> {
+        match self {
+            ReqParam::Single(s) => Box::new(std::iter::once(s.as_str())),
+            ReqParam::Multiple(v) => Box::new(v.iter().map(|s| s.as_str())),
+        }
+    }
 }
 
 impl From<ReqBodyOpt> for ReqBody {
@@ -315,7 +327,7 @@ impl ReqTask {
         let mut builder = client.request(method, url);
         let q = self.queries.iter().collect::<Vec<_>>();
         for (k, v) in q.iter() {
-            builder = builder.query(&v.0.iter().map(|u| (&k, u)).collect::<Vec<_>>());
+            builder = builder.query(&v.iter().map(|u| (&k, u)).collect::<Vec<_>>());
         }
 
         builder = match self.body {
@@ -337,7 +349,7 @@ impl ReqTask {
         };
 
         for (k, v) in self.headers.iter() {
-            for s in v.0.iter() {
+            for s in v.iter() {
                 builder = builder.header(k, s);
             }
         }
@@ -483,42 +495,6 @@ impl<'de> Deserialize<'de> for ReqMultipartValue {
         }
 
         deserializer.deserialize_any(ReqMultipartValueVisitor)
-    }
-}
-
-impl<'de> Deserialize<'de> for ReqParam {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        struct ReqParamVisitor;
-
-        impl<'de> Visitor<'de> for ReqParamVisitor {
-            type Value = ReqParam;
-
-            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                formatter.write_str("string or list of string")
-            }
-
-            fn visit_seq<V>(self, mut seq: V) -> Result<ReqParam, V::Error>
-            where
-                V: SeqAccess<'de>,
-            {
-                let mut strings = vec![];
-                while let Some(v) = seq.next_element()? {
-                    strings.push(v);
-                }
-                Ok(ReqParam(strings))
-            }
-            fn visit_str<E>(self, s: &str) -> Result<ReqParam, E>
-            where
-                E: de::Error,
-            {
-                Ok(ReqParam(vec![s.into()]))
-            }
-        }
-
-        deserializer.deserialize_any(ReqParamVisitor)
     }
 }
 
