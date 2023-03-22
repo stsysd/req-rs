@@ -136,7 +136,8 @@
         }
       ]
     },
-    "ReqTarget": {
+    "ReqTask": {
+      "type": "object",
       "oneOf": [
         {
           "type": "object",
@@ -246,15 +247,11 @@
           },
           "additionalProperties": false
         }
-      ]
-    },
-    "ReqTask": {
-      "type": "object",
+      ],
       "required": [
         "body",
         "description",
         "headers",
-        "method",
         "queries"
       ],
       "properties": {
@@ -279,9 +276,6 @@
           "additionalProperties": {
             "$ref": "#/definitions/ReqParam"
           }
-        },
-        "method": {
-          "$ref": "#/definitions/ReqTarget"
         },
         "queries": {
           "type": "object",
