@@ -6,22 +6,8 @@ use reqwest::Method;
 use schemars::{schema_for, JsonSchema};
 use std::collections::BTreeMap;
 
-#[derive(Debug, Deserialize, Clone, Default)]
-#[serde(rename_all = "UPPERCASE")]
-struct ReqTargetOpt {
-    get: Option<String>,
-    post: Option<String>,
-    put: Option<String>,
-    delete: Option<String>,
-    head: Option<String>,
-    options: Option<String>,
-    connect: Option<String>,
-    patch: Option<String>,
-    trace: Option<String>,
-}
-
 #[derive(Debug, Deserialize, Clone, JsonSchema)]
-#[serde(from = "ReqTargetOpt")]
+#[serde(rename_all = "UPPERCASE")]
 enum ReqTarget {
     Get(String),
     Post(String),
@@ -39,17 +25,7 @@ enum ReqMultipartValue {
     Text(String),
     File(String),
 }
-
-#[derive(Debug, Deserialize, Clone, Default, JsonSchema)]
-struct ReqBodyOpt {
-    plain: Option<String>,
-    json: Option<serde_json::Value>,
-    form: Option<BTreeMap<String, String>>,
-    multipart: Option<BTreeMap<String, ReqMultipartValue>>,
-}
-
 #[derive(Debug, Deserialize, Clone, JsonSchema)]
-#[serde(from = "ReqBodyOpt")]
 enum ReqBody {
     Plain(String),
     Json(serde_json::Value),
@@ -77,10 +53,19 @@ pub struct ReqTask {
     #[serde(flatten)]
     method: ReqTarget,
 
+    #[serde(default)]
     headers: BTreeMap<String, ReqParam>,
+
+    #[serde(default)]
     queries: BTreeMap<String, ReqParam>,
+
+    #[serde(default)]
     body: ReqBody,
+
+    #[serde(default)]
     description: String,
+
+    #[serde(default)]
     config: Option<ReqConfig>,
 }
 
@@ -92,32 +77,6 @@ pub struct Req {
     variables: BTreeMap<String, String>,
     #[serde(default)]
     config: ReqConfig,
-}
-
-impl From<ReqTargetOpt> for ReqTarget {
-    fn from(opt: ReqTargetOpt) -> Self {
-        if let Some(s) = opt.get {
-            ReqTarget::Get(s)
-        } else if let Some(s) = opt.post {
-            ReqTarget::Post(s)
-        } else if let Some(s) = opt.put {
-            ReqTarget::Put(s)
-        } else if let Some(s) = opt.delete {
-            ReqTarget::Delete(s)
-        } else if let Some(s) = opt.head {
-            ReqTarget::Head(s)
-        } else if let Some(s) = opt.options {
-            ReqTarget::Options(s)
-        } else if let Some(s) = opt.connect {
-            ReqTarget::Connect(s)
-        } else if let Some(s) = opt.patch {
-            ReqTarget::Patch(s)
-        } else if let Some(s) = opt.trace {
-            ReqTarget::Trace(s)
-        } else {
-            panic!();
-        }
-    }
 }
 
 impl ReqTarget {
@@ -197,22 +156,6 @@ impl<'a> ReqParam {
     }
 }
 
-impl From<ReqBodyOpt> for ReqBody {
-    fn from(opt: ReqBodyOpt) -> Self {
-        if let Some(s) = opt.plain {
-            ReqBody::Plain(s)
-        } else if let Some(v) = opt.json {
-            ReqBody::Json(v)
-        } else if let Some(m) = opt.form {
-            ReqBody::Form(m)
-        } else if let Some(m) = opt.multipart {
-            ReqBody::Multipart(m)
-        } else {
-            ReqBody::Plain("".into())
-        }
-    }
-}
-
 impl ReqBody {
     fn interpolate(&self, ctx: &InterpolationContext) -> InterpolationResult<Self> {
         Ok(match self {
@@ -241,6 +184,12 @@ impl ReqBody {
                     .collect::<InterpolationResult<_>>()?,
             ),
         })
+    }
+}
+
+impl Default for ReqBody {
+    fn default() -> Self {
+        ReqBody::Plain("".to_string())
     }
 }
 
