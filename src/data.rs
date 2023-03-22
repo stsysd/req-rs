@@ -42,7 +42,7 @@ enum ReqMultipartValue {
 #[derive(Debug, Deserialize, Clone, Default)]
 struct ReqBodyOpt {
     plain: Option<String>,
-    json: Option<toml::Value>,
+    json: Option<serde_json::Value>,
     form: Option<BTreeMap<String, String>>,
     multipart: Option<BTreeMap<String, ReqMultipartValue>>,
 }
@@ -51,7 +51,7 @@ struct ReqBodyOpt {
 #[serde(from = "ReqBodyOpt")]
 enum ReqBody {
     Plain(String),
-    Json(toml::Value),
+    Json(serde_json::Value),
     Form(BTreeMap<String, String>),
     Multipart(BTreeMap<String, ReqMultipartValue>),
 }
@@ -178,47 +178,25 @@ fn interpolate_btree_map(
         .collect::<InterpolationResult<_>>()
 }
 
-fn interpolate_toml_value(
-    val: &toml::Value,
+fn interpolate_json_value(
+    val: &serde_json::Value,
     ctx: &InterpolationContext,
-) -> InterpolationResult<toml::Value> {
+) -> InterpolationResult<serde_json::Value> {
     let v = match val {
-        toml::Value::String(s) => toml::Value::String(interpolate(s, ctx)?),
-        toml::Value::Array(a) => toml::Value::Array(
+        serde_json::Value::String(s) => serde_json::Value::String(interpolate(s, ctx)?),
+        serde_json::Value::Array(a) => serde_json::Value::Array(
             a.iter()
-                .map(|v| interpolate_toml_value(v, ctx))
+                .map(|v| interpolate_json_value(v, ctx))
                 .collect::<InterpolationResult<_>>()?,
         ),
-        toml::Value::Table(t) => toml::Value::Table(
-            t.iter()
-                .map(|(k, v)| Ok((interpolate(k, ctx)?, interpolate_toml_value(v, ctx)?)))
+        serde_json::Value::Object(o) => serde_json::Value::Object(
+            o.iter()
+                .map(|(k, v)| Ok((interpolate(k, ctx)?, interpolate_json_value(v, ctx)?)))
                 .collect::<InterpolationResult<_>>()?,
         ),
         _ => val.clone(),
     };
     Ok(v)
-}
-
-fn toml_to_json(src: &toml::Value) -> serde_json::Value {
-    match src {
-        toml::Value::String(s) => serde_json::Value::String(s.clone()),
-        toml::Value::Integer(i) => serde_json::Value::Number(
-            serde_json::Number::from_f64(*i as f64)
-                .expect("toml number should be able to convert to json number"),
-        ),
-        toml::Value::Float(f) => serde_json::Value::Number(
-            serde_json::Number::from_f64(*f)
-                .expect("toml number should be able to convert to json number"),
-        ),
-        toml::Value::Boolean(b) => serde_json::Value::Bool(*b),
-        toml::Value::Datetime(dt) => serde_json::Value::String(dt.to_string()),
-        toml::Value::Array(a) => serde_json::Value::Array(a.iter().map(toml_to_json).collect()),
-        toml::Value::Table(t) => serde_json::Value::Object(
-            t.iter()
-                .map(|(k, v)| (k.clone(), toml_to_json(v)))
-                .collect(),
-        ),
-    }
 }
 
 impl From<ReqBodyOpt> for ReqBody {
@@ -264,7 +242,7 @@ impl ReqBody {
     fn interpolate(&self, ctx: &InterpolationContext) -> InterpolationResult<Self> {
         Ok(match self {
             ReqBody::Plain(s) => ReqBody::Plain(interpolate(s, ctx)?),
-            ReqBody::Json(v) => ReqBody::Json(interpolate_toml_value(v, ctx)?),
+            ReqBody::Json(v) => ReqBody::Json(interpolate_json_value(v, ctx)?),
             ReqBody::Form(m) => ReqBody::Form(
                 m.iter()
                     .map(|(k, v)| Ok((interpolate(k, ctx)?, interpolate(v, ctx)?)))
@@ -342,7 +320,7 @@ impl ReqTask {
 
         builder = match self.body {
             ReqBody::Plain(ref s) => builder.body(s.clone()),
-            ReqBody::Json(ref v) => builder.json(&toml_to_json(v)),
+            ReqBody::Json(ref v) => builder.json(v),
             ReqBody::Form(ref m) => builder.form(m),
             ReqBody::Multipart(ref m) => {
                 let mut form = reqwest::blocking::multipart::Form::new();
