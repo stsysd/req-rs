@@ -21,11 +21,13 @@ enum ReqTarget {
 }
 
 #[derive(Debug, Deserialize, Clone, JsonSchema)]
+#[serde(rename_all = "lowercase")]
 enum ReqMultipartValue {
     Text(String),
     File(String),
 }
 #[derive(Debug, Deserialize, Clone, JsonSchema)]
+#[serde(rename_all = "lowercase")]
 enum ReqBody {
     Plain(String),
     Json(serde_json::Value),
