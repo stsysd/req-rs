@@ -3,6 +3,7 @@ use crate::interpolation::{
 };
 use anyhow::Context;
 use reqwest::Method;
+use schemars::{schema_for, JsonSchema};
 use serde::de::{self, Deserialize, Deserializer, MapAccess, Visitor};
 use std::collections::BTreeMap;
 use std::fmt;
@@ -20,7 +21,7 @@ struct ReqTargetOpt {
     trace: Option<String>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, JsonSchema)]
 enum ReqTarget {
     Get(String),
     Post(String),
@@ -33,13 +34,13 @@ enum ReqTarget {
     Trace(String),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, JsonSchema)]
 enum ReqMultipartValue {
     Text(String),
     File(String),
 }
 
-#[derive(Debug, Deserialize, Clone, Default)]
+#[derive(Debug, Deserialize, Clone, Default, JsonSchema)]
 struct ReqBodyOpt {
     plain: Option<String>,
     json: Option<serde_json::Value>,
@@ -47,7 +48,7 @@ struct ReqBodyOpt {
     multipart: Option<BTreeMap<String, ReqMultipartValue>>,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, JsonSchema)]
 #[serde(from = "ReqBodyOpt")]
 enum ReqBody {
     Plain(String),
@@ -56,13 +57,14 @@ enum ReqBody {
     Multipart(BTreeMap<String, ReqMultipartValue>),
 }
 
+#[derive(Debug, Deserialize, Clone, JsonSchema)]
 #[serde(untagged)]
 enum ReqParam {
     Single(String),
     Multiple(Vec<String>),
 }
 
-#[derive(Debug, Clone, Deserialize, Default)]
+#[derive(Debug, Clone, Deserialize, Default, JsonSchema)]
 struct ReqConfig {
     #[serde(default)]
     insecure: bool,
@@ -70,7 +72,7 @@ struct ReqConfig {
     redirect: usize,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, JsonSchema)]
 pub struct ReqTask {
     method: ReqTarget,
     headers: BTreeMap<String, ReqParam>,
@@ -80,7 +82,7 @@ pub struct ReqTask {
     config: Option<ReqConfig>,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, JsonSchema)]
 pub struct Req {
     #[serde(rename = "tasks", alias = "req")]
     tasks: BTreeMap<String, ReqTask>,
@@ -408,6 +410,11 @@ impl ReqTask {
 }
 
 impl Req {
+    pub fn schema() -> String {
+        let schema = schema_for!(Req);
+        serde_json::to_string_pretty(&schema).unwrap()
+    }
+
     pub fn get_task(self, name: &str) -> InterpolationResult<Option<ReqTask>> {
         let Req {
             tasks,
