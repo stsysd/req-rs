@@ -115,14 +115,24 @@ struct Opt {
         help = "Dump internal structure of specified task without sending request"
     )]
     dryrun: bool,
+
+    #[clap(long, help = "Print json schema for task definitions file")]
+    json_schema: bool,
 }
 
 fn main() -> anyhow::Result<()> {
     let opt = Opt::parse();
+
+    if opt.json_schema {
+        print!("{}", Req::schema());
+        return Ok(());
+    }
+
     let input = fs::read_to_string(opt.input.as_str())
         .context(format!("fail to open file: {}", opt.input))?;
     let definitions =
         toml::from_str::<Req>(input.as_str()).context(format!("malformed file: {}", opt.input))?;
+
     if let Some(ref name) = opt.name {
         let definitions = definitions.with_values(opt.variables);
         let task = if let Some(task) = definitions
