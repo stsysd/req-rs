@@ -1,0 +1,295 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Req",
+  "type": "object",
+  "required": [
+    "tasks"
+  ],
+  "properties": {
+    "config": {
+      "$ref": "#/definitions/ReqConfig"
+    },
+    "tasks": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/definitions/ReqTask"
+      }
+    },
+    "variables": {
+      "default": {},
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    }
+  },
+  "definitions": {
+    "ReqBody": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "Plain"
+          ],
+          "properties": {
+            "Plain": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "Json"
+          ],
+          "properties": {
+            "Json": true
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "Form"
+          ],
+          "properties": {
+            "Form": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "Multipart"
+          ],
+          "properties": {
+            "Multipart": {
+              "type": "object",
+              "additionalProperties": {
+                "$ref": "#/definitions/ReqMultipartValue"
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "ReqConfig": {
+      "type": "object",
+      "properties": {
+        "insecure": {
+          "default": false,
+          "type": "boolean"
+        },
+        "redirect": {
+          "default": 0,
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0.0
+        }
+      }
+    },
+    "ReqMultipartValue": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "Text"
+          ],
+          "properties": {
+            "Text": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "File"
+          ],
+          "properties": {
+            "File": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "ReqParam": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      ]
+    },
+    "ReqTarget": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "Get"
+          ],
+          "properties": {
+            "Get": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "Post"
+          ],
+          "properties": {
+            "Post": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "Put"
+          ],
+          "properties": {
+            "Put": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "Delete"
+          ],
+          "properties": {
+            "Delete": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "Head"
+          ],
+          "properties": {
+            "Head": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "Options"
+          ],
+          "properties": {
+            "Options": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "Connect"
+          ],
+          "properties": {
+            "Connect": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "Patch"
+          ],
+          "properties": {
+            "Patch": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "Trace"
+          ],
+          "properties": {
+            "Trace": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "ReqTask": {
+      "type": "object",
+      "required": [
+        "body",
+        "description",
+        "headers",
+        "method",
+        "queries"
+      ],
+      "properties": {
+        "body": {
+          "$ref": "#/definitions/ReqBody"
+        },
+        "config": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ReqConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "description": {
+          "type": "string"
+        },
+        "headers": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/ReqParam"
+          }
+        },
+        "method": {
+          "$ref": "#/definitions/ReqTarget"
+        },
+        "queries": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/ReqParam"
+          }
+        }
+      }
+    }
+  }
+}
