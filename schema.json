@@ -2,9 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Req",
   "type": "object",
-  "required": [
-    "tasks"
-  ],
+  "required": ["tasks"],
   "properties": {
     "config": {
       "$ref": "#/definitions/ReqConfig"
@@ -28,9 +26,7 @@
       "oneOf": [
         {
           "type": "object",
-          "required": [
-            "plain"
-          ],
+          "required": ["plain"],
           "properties": {
             "plain": {
               "type": "string"
@@ -40,9 +36,7 @@
         },
         {
           "type": "object",
-          "required": [
-            "json"
-          ],
+          "required": ["json"],
           "properties": {
             "json": true
           },
@@ -50,9 +44,7 @@
         },
         {
           "type": "object",
-          "required": [
-            "form"
-          ],
+          "required": ["form"],
           "properties": {
             "form": {
               "type": "object",
@@ -65,9 +57,7 @@
         },
         {
           "type": "object",
-          "required": [
-            "multipart"
-          ],
+          "required": ["multipart"],
           "properties": {
             "multipart": {
               "type": "object",
@@ -99,9 +89,7 @@
       "oneOf": [
         {
           "type": "object",
-          "required": [
-            "text"
-          ],
+          "required": ["text"],
           "properties": {
             "text": {
               "type": "string"
@@ -111,9 +99,7 @@
         },
         {
           "type": "object",
-          "required": [
-            "file"
-          ],
+          "required": ["file"],
           "properties": {
             "file": {
               "type": "string"
@@ -141,111 +127,84 @@
       "oneOf": [
         {
           "type": "object",
-          "required": [
-            "GET"
-          ],
+          "required": ["GET"],
           "properties": {
             "GET": {
               "type": "string"
             }
-          },
-          "additionalProperties": false
+          }
         },
         {
           "type": "object",
-          "required": [
-            "POST"
-          ],
+          "required": ["POST"],
           "properties": {
             "POST": {
               "type": "string"
             }
-          },
-          "additionalProperties": false
+          }
         },
         {
           "type": "object",
-          "required": [
-            "PUT"
-          ],
+          "required": ["PUT"],
           "properties": {
             "PUT": {
               "type": "string"
             }
-          },
-          "additionalProperties": false
+          }
         },
         {
           "type": "object",
-          "required": [
-            "DELETE"
-          ],
+          "required": ["DELETE"],
           "properties": {
             "DELETE": {
               "type": "string"
             }
-          },
-          "additionalProperties": false
+          }
         },
         {
           "type": "object",
-          "required": [
-            "HEAD"
-          ],
+          "required": ["HEAD"],
           "properties": {
             "HEAD": {
               "type": "string"
             }
-          },
-          "additionalProperties": false
+          }
         },
         {
           "type": "object",
-          "required": [
-            "OPTIONS"
-          ],
+          "required": ["OPTIONS"],
           "properties": {
             "OPTIONS": {
               "type": "string"
             }
-          },
-          "additionalProperties": false
+          }
         },
         {
           "type": "object",
-          "required": [
-            "CONNECT"
-          ],
+          "required": ["CONNECT"],
           "properties": {
             "CONNECT": {
               "type": "string"
             }
-          },
-          "additionalProperties": false
+          }
         },
         {
           "type": "object",
-          "required": [
-            "PATCH"
-          ],
+          "required": ["PATCH"],
           "properties": {
             "PATCH": {
               "type": "string"
             }
-          },
-          "additionalProperties": false
+          }
         },
         {
           "type": "object",
-          "required": [
-            "TRACE"
-          ],
+          "required": ["TRACE"],
           "properties": {
             "TRACE": {
               "type": "string"
             }
-          },
-          "additionalProperties": false
+          }
         }
       ],
       "properties": {
