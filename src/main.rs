@@ -176,12 +176,12 @@ fn download<W: Write>(res: &mut reqwest::blocking::Response, w: &mut W) -> anyho
         let style = ProgressStyle::default_bar()
             .template(
                 "{spinner:.green} [{elapsed_precise}] [{bar:.green}] {bytes}/{total_bytes} ({bytes_per_sec})",
-            )
+            )?
             .progress_chars("||.");
         ProgressBar::new(len).with_style(style)
     } else {
         let style = ProgressStyle::default_bar()
-            .template("{spinner:.green} [{elapsed_precise}] {bytes} ({bytes_per_sec})")
+            .template("{spinner:.green} [{elapsed_precise}] {bytes} ({bytes_per_sec})")?
             .progress_chars("||.");
         ProgressBar::new(0).with_style(style)
     };
