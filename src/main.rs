@@ -10,7 +10,8 @@ use data::Req;
 use indicatif::{ProgressBar, ProgressStyle};
 use std::error::Error;
 use std::fs;
-use std::io::{stdout, BufWriter, Read, Write};
+use std::io::{stdin, stdout, BufWriter, Read, Write};
+use std::process::ExitCode;
 
 #[derive(Debug)]
 enum ParseKVError<T, U>
@@ -117,16 +118,32 @@ struct Opt {
     dryrun: bool,
 }
 
-fn main() -> anyhow::Result<()> {
-    let opt = Opt::parse();
-    let input = fs::read_to_string(opt.input.as_str())
-        .context(format!("fail to open file: {}", opt.input))?;
-    let definitions =
-        toml::from_str::<Req>(input.as_str()).context(format!("malformed file: {}", opt.input))?;
-    if let Some(ref name) = opt.name {
-        let definitions = definitions.with_values(opt.variables);
+impl Opt {
+    pub(crate) fn exec<R, W>(&self, r: &mut R, w: &mut W) -> anyhow::Result<ExitCode>
+    where
+        R: Read,
+        W: Write,
+    {
+        let input = if self.input == "-" {
+            let mut buf = String::new();
+            r.read_to_string(&mut buf)?;
+            buf
+        } else {
+            fs::read_to_string(self.input.as_str())
+                .context(format!("fail to open file: {}", self.input))?
+        };
+        let definitions = toml::from_str::<Req>(input.as_str())
+            .context(format!("malformed file: {}", self.input))?;
+
+        if self.name.is_none() {
+            print!("{}", definitions.display_tasks());
+            return Ok(ExitCode::SUCCESS);
+        }
+
+        let name = self.name.as_ref().unwrap();
+        let definitions = definitions.with_values(self.variables.clone());
         let task = if let Some(task) = definitions
-            .get_task(name)
+            .get_task(&name)
             .context("fail to resolve context")?
         {
             Ok(task)
@@ -134,39 +151,45 @@ fn main() -> anyhow::Result<()> {
             Err(anyhow!("task `{}` is not defined", name))
         }?;
 
-        if opt.dryrun {
+        if self.dryrun {
             println!("{:#?}", task);
-            return Ok(());
+            return Ok(ExitCode::SUCCESS);
         }
 
-        if opt.curl {
+        if self.curl {
             println!("{}", task.to_curl()?);
-            return Ok(());
+            return Ok(ExitCode::SUCCESS);
         }
 
         let mut res = task.send().context("fail to send request")?;
-        if let Some(ref path) = opt.output {
+        if let Some(ref path) = self.output {
             let f = std::fs::File::create(path)?;
             let mut w = BufWriter::new(f);
             download(&mut res, &mut w)?;
-            if opt.include_header {
+            if self.include_header {
                 print_header(&res)?;
             }
         } else {
             let mut buf = vec![];
             download(&mut res, &mut buf)?;
-            if opt.include_header {
+            if self.include_header {
                 print_header(&res)?;
             }
-            let out = stdout();
-            let mut out = BufWriter::new(out.lock());
+            let mut out = BufWriter::new(w);
             out.write(&buf)?;
         }
-        Ok(())
-    } else {
-        print!("{}", definitions.display_tasks());
-        Ok(())
+
+        let s = res.status();
+        if s.is_success() {
+            Ok(ExitCode::SUCCESS)
+        } else {
+            Ok(ExitCode::FAILURE)
+        }
     }
+}
+
+fn main() -> anyhow::Result<ExitCode> {
+    Opt::parse().exec(&mut stdin(), &mut stdout())
 }
 
 fn download<W: Write>(res: &mut reqwest::blocking::Response, w: &mut W) -> anyhow::Result<()> {
