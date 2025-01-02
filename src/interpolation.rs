@@ -1,4 +1,4 @@
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 use regex::{Match, Regex};
 use std::borrow::Cow;
 use std::collections::{BTreeMap, HashMap};
@@ -38,8 +38,8 @@ pub fn create_interpolation_context(map: BTreeMap<String, String>) -> InterpResu
     ))
 }
 
-static PLACEHOLDER_PATTERN: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"(\$)?\$(?:\{([^}]+)\}|([[:alnum:]]+))").unwrap());
+static PLACEHOLDER_PATTERN: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(\$)?\$(?:\{([^}]+)\}|([[:alnum:]]+))").unwrap());
 
 fn interpolate_with_func<'i, F>(s: &'i str, getter: &mut F) -> InterpResult<Cow<'i, str>>
 where
