@@ -69,12 +69,12 @@ where
 }
 
 #[derive(Debug, Parser)]
-#[clap(name = "req", about, version)]
+#[command(name = "req", about, version)]
 struct Opt {
-    #[clap(help = "Specify task by name")]
+    #[arg(help = "Specify task by name")]
     name: Option<String>,
 
-    #[clap(
+    #[arg(
         name = "DEF",
         short = 'f',
         long = "file",
@@ -83,7 +83,7 @@ struct Opt {
     )]
     input: String,
 
-    #[clap(
+    #[arg(
         name = "OUTPUT",
         short,
         long = "out",
@@ -91,26 +91,26 @@ struct Opt {
     )]
     output: Option<String>,
 
-    #[clap(
+    #[arg(
         short,
         long = "include-header",
         help = "Include response headers in the output"
     )]
     include_header: bool,
 
-    #[clap(
+    #[arg(
         name = "KEY=VALUE",
         short = 'v',
         long = "var",
         help = "Pass variable in the form KEY=VALUE",
-        parse(try_from_str = parse_key_val)
+        value_parser = parse_key_val::<String, String>,
     )]
     variables: Vec<(String, String)>,
 
-    #[clap(long, help = "Print compatible curl command (experimental)")]
+    #[arg(long, help = "Print compatible curl command (experimental)")]
     curl: bool,
 
-    #[clap(
+    #[arg(
         long,
         help = "Dump internal structure of specified task without sending request"
     )]
