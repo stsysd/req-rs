@@ -4,6 +4,7 @@ use crate::interpolation::{
 use anyhow::Context;
 use reqwest::Method;
 use serde::de::{self, Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
+use serde_json::value::Value;
 use std::collections::BTreeMap;
 use std::fmt;
 
@@ -42,7 +43,7 @@ enum ReqMultipartValue {
 #[derive(Debug, Deserialize, Clone, Default)]
 struct ReqBodyOpt {
     plain: Option<String>,
-    json: Option<toml::Value>,
+    json: Option<Value>,
     form: Option<BTreeMap<String, String>>,
     multipart: Option<BTreeMap<String, ReqMultipartValue>>,
 }
@@ -51,7 +52,7 @@ struct ReqBodyOpt {
 #[serde(from = "ReqBodyOpt")]
 enum ReqBody {
     Plain(String),
-    Json(toml::Value),
+    Json(Value),
     Form(BTreeMap<String, String>),
     Multipart(BTreeMap<String, ReqMultipartValue>),
 }
@@ -177,15 +178,15 @@ fn interpolate_btree_map(
         .collect::<InterpResult<_>>()
 }
 
-fn interpolate_toml_value(val: &toml::Value, ctxt: &InterpContext) -> InterpResult<toml::Value> {
+fn interpolate_toml_value(val: &Value, ctxt: &InterpContext) -> InterpResult<Value> {
     let v = match val {
-        toml::Value::String(s) => toml::Value::String(interpolate(s, ctxt)?),
-        toml::Value::Array(a) => toml::Value::Array(
+        Value::String(s) => Value::String(interpolate(s, ctxt)?),
+        Value::Array(a) => Value::Array(
             a.iter()
                 .map(|v| interpolate_toml_value(v, ctxt))
                 .collect::<InterpResult<_>>()?,
         ),
-        toml::Value::Table(t) => toml::Value::Table(
+        Value::Object(t) => Value::Object(
             t.iter()
                 .map(|(k, v)| Ok((interpolate(k, ctxt)?, interpolate_toml_value(v, ctxt)?)))
                 .collect::<InterpResult<_>>()?,
@@ -193,28 +194,6 @@ fn interpolate_toml_value(val: &toml::Value, ctxt: &InterpContext) -> InterpResu
         _ => val.clone(),
     };
     Ok(v)
-}
-
-fn toml_to_json(src: &toml::Value) -> serde_json::Value {
-    match src {
-        toml::Value::String(s) => serde_json::Value::String(s.clone()),
-        toml::Value::Integer(i) => serde_json::Value::Number(
-            serde_json::Number::from_f64(*i as f64)
-                .expect("toml number should be able to convert to json number"),
-        ),
-        toml::Value::Float(f) => serde_json::Value::Number(
-            serde_json::Number::from_f64(*f)
-                .expect("toml number should be able to convert to json number"),
-        ),
-        toml::Value::Boolean(b) => serde_json::Value::Bool(*b),
-        toml::Value::Datetime(dt) => serde_json::Value::String(dt.to_string()),
-        toml::Value::Array(a) => serde_json::Value::Array(a.iter().map(toml_to_json).collect()),
-        toml::Value::Table(t) => serde_json::Value::Object(
-            t.iter()
-                .map(|(k, v)| (k.clone(), toml_to_json(v)))
-                .collect(),
-        ),
-    }
 }
 
 impl From<ReqBodyOpt> for ReqBody {
@@ -338,7 +317,7 @@ impl ReqTask {
 
         builder = match self.body {
             ReqBody::Plain(ref s) => builder.body(s.clone()),
-            ReqBody::Json(ref v) => builder.json(&toml_to_json(v)),
+            ReqBody::Json(ref v) => builder.json(v),
             ReqBody::Form(ref m) => builder.form(m),
             ReqBody::Multipart(ref m) => {
                 let mut form = reqwest::blocking::multipart::Form::new();
