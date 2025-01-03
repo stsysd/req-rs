@@ -243,3 +243,293 @@ fn print_header(res: &reqwest::blocking::Response) -> anyhow::Result<()> {
     writeln!(out, "")?;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use httpmock::prelude::*;
+    use httpmock::Method;
+    use rstest::{fixture, rstest};
+    use serde_json::json;
+
+    #[fixture]
+    fn server() -> MockServer {
+        MockServer::start()
+    }
+
+    #[rstest]
+    #[case("get", Method::GET)]
+    #[case("post", Method::POST)]
+    #[case("put", Method::PUT)]
+    #[case("delete", Method::DELETE)]
+    #[case("head", Method::HEAD)]
+    #[case("options", Method::OPTIONS)]
+    #[case("patch", Method::PATCH)]
+    #[case("trace", Method::TRACE)]
+    fn test_method(server: MockServer, #[case] task: &str, #[case] method: Method) {
+        let input = format!(
+            r#"
+                [tasks.{}]
+                {} = "http://{}/{}"
+            "#,
+            task,
+            method,
+            server.address(),
+            task,
+        );
+        let opt = Opt::try_parse_from(vec!["req", "-f", "-", task]).unwrap();
+        let mock = server.mock(|when, then| {
+            when.method(method).path(format!("/{}", task));
+            then.status(200).body("ok");
+        });
+
+        let code = opt
+            .exec(&mut input.as_bytes(), &mut std::io::empty())
+            .unwrap();
+
+        mock.assert();
+        assert_eq!(code, ExitCode::SUCCESS);
+    }
+
+    #[rstest]
+    fn test_connect(server: MockServer) {
+        let input = format!(
+            r#"
+                [tasks.connect]
+                CONNECT = "http://{}"
+            "#,
+            server.address(),
+        );
+        let opt = Opt::try_parse_from(vec!["req", "-f", "-", "connect"]).unwrap();
+        let mock = server.mock(|when, then| {
+            when.method(Method::CONNECT).path("");
+            then.status(200).body("ok");
+        });
+
+        let code = opt
+            .exec(&mut input.as_bytes(), &mut std::io::empty())
+            .unwrap();
+
+        mock.assert();
+        assert_eq!(code, ExitCode::SUCCESS);
+    }
+
+    #[rstest]
+    fn test_get_with_queries(server: MockServer) {
+        let input = format!(
+            r#"
+                [tasks.get_with_queries]
+                GET = "http://{}/get_with_queries"
+
+                [tasks.get_with_queries.queries]
+                foo = "FOO"
+                bar = "BAR"
+            "#,
+            server.address(),
+        );
+        let opt = Opt::try_parse_from(vec!["req", "-f", "-", "get_with_queries"]).unwrap();
+        let mock = server.mock(|when, then| {
+            when.method(Method::GET)
+                .path("/get_with_queries")
+                .query_param("foo", "FOO")
+                .query_param("bar", "BAR");
+            then.status(200).body("ok");
+        });
+
+        let code = opt
+            .exec(&mut input.as_bytes(), &mut std::io::empty())
+            .unwrap();
+
+        mock.assert();
+        assert_eq!(code, ExitCode::SUCCESS);
+    }
+
+    #[rstest]
+    fn test_get_with_headers(server: MockServer) {
+        let input = format!(
+            r#"
+                [tasks.get_with_headers]
+                GET = "http://{}/get_with_headers"
+
+                [tasks.get_with_headers.headers]
+                "X-Authorization" = "Bearer HOGE"
+            "#,
+            server.address(),
+        );
+        let opt = Opt::try_parse_from(vec!["req", "-f", "-", "get_with_headers"]).unwrap();
+        let mock = server.mock(|when, then| {
+            when.method(Method::GET)
+                .path("/get_with_headers")
+                .header("X-Authorization", "Bearer HOGE");
+            then.status(200).body("ok");
+        });
+
+        let code = opt
+            .exec(&mut input.as_bytes(), &mut std::io::empty())
+            .unwrap();
+
+        mock.assert();
+        assert_eq!(code, ExitCode::SUCCESS);
+    }
+
+    #[rstest]
+    fn test_post_with_body(server: MockServer) {
+        let input = format!(
+            r#"
+                [tasks.post_with_body]
+                POST = "http://{}/post_with_body"
+
+                [tasks.post_with_body.body]
+                plain = "hello"
+            "#,
+            server.address(),
+        );
+        let opt = Opt::try_parse_from(vec!["req", "-f", "-", "post_with_body"]).unwrap();
+        let mock = server.mock(|when, then| {
+            when.method(Method::POST)
+                .path("/post_with_body")
+                .body("hello");
+            then.status(200).body("ok");
+        });
+
+        let code = opt
+            .exec(&mut input.as_bytes(), &mut std::io::empty())
+            .unwrap();
+
+        mock.assert();
+        assert_eq!(code, ExitCode::SUCCESS);
+    }
+
+    #[rstest]
+    fn test_post_with_json(server: MockServer) {
+        let input = format!(
+            r#"
+                [tasks.post_with_json]
+                POST = "http://{}/post_with_json"
+
+                [tasks.post_with_json.body.json]
+                str = "hello"
+                num = 42
+                bool = true
+                obj = {{ "foo"="bar" }}
+            "#,
+            server.address(),
+        );
+        let opt = Opt::try_parse_from(vec!["req", "-f", "-", "post_with_json"]).unwrap();
+        let mock = server.mock(|when, then| {
+            when.method(Method::POST)
+                .path("/post_with_json")
+                .header("content-type", "application/json")
+                .json_body(json!({
+                    "str": "hello",
+                    "num": 42,
+                    "bool": true,
+                    "obj": { "foo": "bar" },
+                }));
+            then.status(200).body("ok");
+        });
+
+        let code = opt
+            .exec(&mut input.as_bytes(), &mut std::io::empty())
+            .unwrap();
+
+        mock.assert();
+        assert_eq!(code, ExitCode::SUCCESS);
+    }
+
+    #[rstest]
+    fn test_post_with_form(server: MockServer) {
+        let input = format!(
+            r#"
+                [tasks.post_with_form]
+                POST = "http://{}/post_with_form"
+
+                [tasks.post_with_form.body.form]
+                foo = "FOO"
+                bar = "BAR"
+            "#,
+            server.address(),
+        );
+        let opt = Opt::try_parse_from(vec!["req", "-f", "-", "post_with_form"]).unwrap();
+        let mock = server.mock(|when, then| {
+            when.method(Method::POST)
+                .path("/post_with_form")
+                .header("content-type", "application/x-www-form-urlencoded")
+                .x_www_form_urlencoded_tuple("foo", "FOO")
+                .x_www_form_urlencoded_tuple("bar", "BAR");
+            then.status(200).body("ok");
+        });
+
+        let code = opt
+            .exec(&mut input.as_bytes(), &mut std::io::empty())
+            .unwrap();
+
+        mock.assert();
+        assert_eq!(code, ExitCode::SUCCESS);
+    }
+
+    #[rstest]
+    fn test_redirect(server: MockServer) {
+        let input = format!(
+            r#"
+                [tasks.redirect]
+                GET = "http://{}/redirect/0"
+
+                [config]
+                redirect = 2
+            "#,
+            server.address(),
+        );
+        let opt = Opt::try_parse_from(vec!["req", "-f", "-", "redirect"]).unwrap();
+        let mock_first = server.mock(|when, then| {
+            when.method(Method::GET)
+                .path("/redirect/0");
+            then.status(302).header("Location", server.url("/redirect/1"));
+        });
+        let mock_second = server.mock(|when, then| {
+            when.method(Method::GET)
+                .path("/redirect/1");
+            then.status(200).body("ok");
+        });
+
+        let code = opt
+            .exec(&mut input.as_bytes(), &mut std::io::empty())
+            .unwrap();
+
+        mock_first.assert();
+        mock_second.assert();
+        assert_eq!(code, ExitCode::SUCCESS);
+    }
+
+    #[rstest]
+    fn test_too_many_redirect(server: MockServer) {
+        let input = format!(
+            r#"
+                [tasks.redirect]
+                GET = "http://{}/redirect/0"
+
+                [config]
+                redirect = 2
+            "#,
+            server.address(),
+        );
+        let opt = Opt::try_parse_from(vec!["req", "-f", "-", "redirect"]).unwrap();
+        let mock_first = server.mock(|when, then| {
+            when.method(Method::GET)
+                .path("/redirect/0");
+            then.status(302).header("Location", server.url("/redirect/1"));
+        });
+        let mock_second = server.mock(|when, then| {
+            when.method(Method::GET)
+                .path("/redirect/1");
+            then.status(302).header("Location", server.url("/redirect/2"));
+        });
+
+        let res = opt
+            .exec(&mut input.as_bytes(), &mut std::io::empty());
+
+        mock_first.assert();
+        mock_second.assert();
+        assert!(res.is_err(), "result: {:#?}", res);
+    }
+}

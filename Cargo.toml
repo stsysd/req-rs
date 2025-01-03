@@ -26,3 +26,6 @@ version = "0.12"
 default-features = false
 features = ["json", "blocking", "multipart", "rustls-tls"]
 
+[dev-dependencies]
+httpmock = "0.7.0"
+rstest = "0.24.0"
