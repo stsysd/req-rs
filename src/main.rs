@@ -251,6 +251,7 @@ mod tests {
     use httpmock::Method;
     use rstest::{fixture, rstest};
     use serde_json::json;
+    use uuid::Uuid;
 
     #[fixture]
     fn server() -> MockServer {
@@ -469,6 +470,65 @@ mod tests {
     }
 
     #[rstest]
+    fn test_post_with_multipart(server: MockServer) {
+        let uuid = Uuid::new_v4();
+
+        let input = format!(
+            r#"
+                [tasks.post_with_multipart]
+                POST = "http://{}/post_with_multipart"
+
+                [tasks.post_with_multipart.body.multipart]
+                uuid = "{}"
+                foo = "FOO"
+            "#,
+            server.address(),
+            uuid,
+        );
+        let opt = Opt::try_parse_from(vec!["req", "-f", "-", "post_with_multipart"]).unwrap();
+        let mock = server.mock(|when, then| {
+            when.method(Method::POST)
+                .path("/post_with_multipart")
+                .body_contains(uuid.to_string());
+            then.status(200).body("ok");
+        });
+        let code = opt
+            .exec(&mut input.as_bytes(), &mut std::io::empty())
+            .unwrap();
+        mock.assert();
+        assert_eq!(code, ExitCode::SUCCESS);
+    }
+
+    #[rstest]
+    fn test_post_with_file(server: MockServer) {
+        let input = format!(
+            r#"
+                [tasks.post_with_multipart]
+                POST = "http://{}/post_with_multipart"
+
+                [tasks.post_with_multipart.body.multipart]
+                "Cargo.toml".file = "Cargo.toml"
+            "#,
+            server.address(),
+        );
+        let content = fs::read("Cargo.toml").unwrap();
+        let opt = Opt::try_parse_from(vec!["req", "-f", "-", "post_with_multipart"]).unwrap();
+        let mock = server.mock(|when, then| {
+            when.method(Method::POST)
+                .path("/post_with_multipart")
+                .body_contains(String::from_utf8(content).unwrap());
+            then.status(200).body("ok");
+        });
+        
+        let code = opt
+            .exec(&mut input.as_bytes(), &mut std::io::empty())
+            .unwrap();
+
+        mock.assert();
+        assert_eq!(code, ExitCode::SUCCESS);
+    }
+
+    #[rstest]
     fn test_redirect(server: MockServer) {
         let input = format!(
             r#"
@@ -531,5 +591,23 @@ mod tests {
         mock_first.assert();
         mock_second.assert();
         assert!(res.is_err(), "result: {:#?}", res);
+    }
+
+    #[rstest]
+    fn test_dryrun(server: MockServer) {
+        let input = format!(
+            r#"
+                [tasks.get]
+                GET = "http://{}/get"
+            "#,
+            server.address(),
+        );
+        let opt = Opt::try_parse_from(vec!["req", "-f", "-", "get", "--dryrun"]).unwrap();
+
+        let code = opt
+            .exec(&mut input.as_bytes(), &mut std::io::empty())
+            .unwrap();
+
+        assert_eq!(code, ExitCode::SUCCESS);
     }
 }
