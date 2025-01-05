@@ -28,19 +28,18 @@ jobs:
             artifact_name: req
             asset_name: req-x86_64-apple-darwin
     runs-on: ${{ matrix.os }}
+
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rustup-cache@v2
 
       - name: Install stable toolchain
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: stable
-          override: true
+          target: ${{ matrix.target }}
 
-      
-      - name: Add rust target
-        run: rustup target add ${{ matrix.target }}
+      - name: Test
+        run: cargo test --verbose
 
       - name: Cross build with all features
         uses: actions-rs/cargo@v1
