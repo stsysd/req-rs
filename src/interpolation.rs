@@ -53,9 +53,9 @@ where
         if cap.get(1).is_some() {
             vec.push(Cow::from(&s[m.start() + 1..m.end()]));
         } else if let Some(key) = cap.get(2) {
-            vec.push(Cow::from(getter(key.as_str())?));
+            vec.push(getter(key.as_str())?);
         } else if let Some(key) = cap.get(3) {
-            vec.push(Cow::from(getter(key.as_str())?));
+            vec.push(getter(key.as_str())?);
         }
         ix = m.end();
     }
@@ -97,7 +97,7 @@ fn getter_with_cache<'i>(
                 let s =
                     interpolate_with_func(&map[key], &mut |k| getter_with_cache(k, map, cache))?;
                 cache.insert(key.to_string(), Delay::Done(s.to_string()));
-                Ok(Cow::from(s))
+                Ok(s)
             } else {
                 Err(InterpError::ValueNotFound(key.to_string()))
             }

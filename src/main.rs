@@ -143,7 +143,7 @@ impl Opt {
         let name = self.name.as_ref().unwrap();
         let definitions = definitions.with_values(self.variables.clone());
         let task = if let Some(task) = definitions
-            .get_task(&name)
+            .get_task(name)
             .context("fail to resolve context")?
         {
             Ok(task)
@@ -233,14 +233,14 @@ fn print_header(res: &reqwest::blocking::Response) -> anyhow::Result<()> {
     if let Some(reason) = status.canonical_reason() {
         writeln!(out, " {}", reason)?;
     } else {
-        writeln!(out, "")?;
+        writeln!(out)?;
     }
     for (key, val) in res.headers().iter() {
         write!(out, "{}: ", key)?;
         out.write(val.as_bytes())?;
-        writeln!(out, "")?;
+        writeln!(out)?;
     }
-    writeln!(out, "")?;
+    writeln!(out)?;
     Ok(())
 }
 

@@ -115,8 +115,7 @@ impl From<ReqMethodOpt> for ReqMethod {
 
 impl ReqMethodOpt {
     fn is_empty(&self) -> bool {
-        vec![
-            &self.get,
+        [&self.get,
             &self.post,
             &self.put,
             &self.delete,
@@ -124,8 +123,7 @@ impl ReqMethodOpt {
             &self.options,
             &self.connect,
             &self.patch,
-            &self.trace,
-        ]
+            &self.trace]
         .iter()
         .all(|x| x.is_none())
     }
@@ -377,7 +375,7 @@ impl ReqTask {
         }
         if let Some(body) = request.body() {
             let bytes = body.as_bytes().unwrap();
-            if bytes.len() > 0 {
+            if !bytes.is_empty() {
                 let mut boundary = String::from("REQUEST_BODY");
                 let body = String::from_utf8(body.as_bytes().unwrap().to_vec()).unwrap();
                 while body.contains(&boundary) {
@@ -425,7 +423,7 @@ impl Req {
     pub fn display_tasks(&self) -> String {
         let mut strings = vec![];
         for (k, v) in self.tasks.iter() {
-            let desc = if v.description.len() > 0 {
+            let desc = if !v.description.is_empty() {
                 &v.description
             } else {
                 "<NO DESCRIPTION>"
@@ -705,7 +703,7 @@ impl<'de> Deserialize<'de> for ReqTask {
             }
         }
 
-        const FIELDS: &'static [&'static str] = &[
+        const FIELDS: &[&str] = &[
             "get",
             "post",
             "put",
