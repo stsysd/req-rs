@@ -324,7 +324,7 @@ mod tests {
 
                 [tasks.get_with_queries.queries]
                 foo = "FOO"
-                bar = "BAR"
+                bar = ["BAR", "BAZ"]
             "#,
             server.address(),
         );
@@ -333,7 +333,8 @@ mod tests {
             when.method(Method::GET)
                 .path("/get_with_queries")
                 .query_param("foo", "FOO")
-                .query_param("bar", "BAR");
+                .query_param("bar", "BAR")
+                .query_param("bar", "BAZ");
             then.status(200).body("ok");
         });
 
@@ -354,6 +355,7 @@ mod tests {
 
                 [tasks.get_with_headers.headers]
                 "X-Authorization" = "Bearer HOGE"
+                "FOO" = ["BAR", "BAZ"]
             "#,
             server.address(),
         );
@@ -361,7 +363,9 @@ mod tests {
         let mock = server.mock(|when, then| {
             when.method(Method::GET)
                 .path("/get_with_headers")
-                .header("X-Authorization", "Bearer HOGE");
+                .header("X-Authorization", "Bearer HOGE")
+                .header("FOO", "BAR")
+                .header("FOO", "BAZ");
             then.status(200).body("ok");
         });
 
