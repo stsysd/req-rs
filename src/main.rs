@@ -132,17 +132,17 @@ impl Opt {
             fs::read_to_string(self.input.as_str())
                 .context(format!("fail to open file: {}", self.input))?
         };
-        let definitions = toml::from_str::<Req>(input.as_str())
+        let req = toml::from_str::<Req>(input.as_str())
             .context(format!("malformed file: {}", self.input))?;
 
         if self.name.is_none() {
-            print!("{}", definitions.display_tasks());
+            print!("{}", req.display_tasks());
             return Ok(ExitCode::SUCCESS);
         }
 
         let name = self.name.as_ref().unwrap();
-        let definitions = definitions.with_values(self.variables.clone());
-        let task = if let Some(task) = definitions
+        let req = req.with_values(self.variables.clone());
+        let task = if let Some(task) = req
             .get_task(name)
             .context("fail to resolve context")?
         {
