@@ -159,21 +159,16 @@ impl Opt {
         }
 
         let mut res = task.send().context("fail to send request")?;
+        let mut buf = vec![];
+        download(&mut res, &mut buf)?;
+        if self.include_header {
+            print_header(&res)?;
+        }
+
         if let Some(ref path) = self.output {
-            let f = std::fs::File::create(path)?;
-            let mut w = BufWriter::new(f);
-            download(&mut res, &mut w)?;
-            if self.include_header {
-                print_header(&res)?;
-            }
+            std::fs::File::create(path)?.write_all(&buf)?;
         } else {
-            let mut buf = vec![];
-            download(&mut res, &mut buf)?;
-            if self.include_header {
-                print_header(&res)?;
-            }
-            let mut out = BufWriter::new(w);
-            out.write(&buf)?;
+            w.write_all(&buf)?;
         }
 
         let s = res.status();
