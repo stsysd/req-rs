@@ -142,10 +142,7 @@ impl Opt {
 
         let name = self.name.as_ref().unwrap();
         let req = req.with_values(self.variables.clone());
-        let task = if let Some(task) = req
-            .get_task(name)
-            .context("fail to resolve context")?
-        {
+        let task = if let Some(task) = req.get_task(name).context("fail to resolve context")? {
             Ok(task)
         } else {
             Err(anyhow!("task `{}` is not defined", name))
@@ -523,7 +520,7 @@ mod tests {
                 .body_contains(String::from_utf8(content).unwrap());
             then.status(200).body("ok");
         });
-        
+
         let code = opt
             .exec(&mut input.as_bytes(), &mut std::io::empty())
             .unwrap();
@@ -546,13 +543,12 @@ mod tests {
         );
         let opt = Opt::try_parse_from(vec!["req", "-f", "-", "redirect"]).unwrap();
         let mock_first = server.mock(|when, then| {
-            when.method(Method::GET)
-                .path("/redirect/0");
-            then.status(302).header("Location", server.url("/redirect/1"));
+            when.method(Method::GET).path("/redirect/0");
+            then.status(302)
+                .header("Location", server.url("/redirect/1"));
         });
         let mock_second = server.mock(|when, then| {
-            when.method(Method::GET)
-                .path("/redirect/1");
+            when.method(Method::GET).path("/redirect/1");
             then.status(200).body("ok");
         });
 
@@ -579,18 +575,17 @@ mod tests {
         );
         let opt = Opt::try_parse_from(vec!["req", "-f", "-", "redirect"]).unwrap();
         let mock_first = server.mock(|when, then| {
-            when.method(Method::GET)
-                .path("/redirect/0");
-            then.status(302).header("Location", server.url("/redirect/1"));
+            when.method(Method::GET).path("/redirect/0");
+            then.status(302)
+                .header("Location", server.url("/redirect/1"));
         });
         let mock_second = server.mock(|when, then| {
-            when.method(Method::GET)
-                .path("/redirect/1");
-            then.status(302).header("Location", server.url("/redirect/2"));
+            when.method(Method::GET).path("/redirect/1");
+            then.status(302)
+                .header("Location", server.url("/redirect/2"));
         });
 
-        let res = opt
-            .exec(&mut input.as_bytes(), &mut std::io::empty());
+        let res = opt.exec(&mut input.as_bytes(), &mut std::io::empty());
 
         mock_first.assert();
         mock_second.assert();

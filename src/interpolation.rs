@@ -1,8 +1,8 @@
-use std::sync::LazyLock;
 use regex::{Match, Regex};
 use std::borrow::Cow;
 use std::collections::{BTreeMap, HashMap};
 use std::fmt;
+use std::sync::LazyLock;
 
 #[derive(Debug, PartialEq)]
 pub enum InterpError {
