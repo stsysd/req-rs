@@ -15,7 +15,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-      - uses: Swatinem/rustup-cache@v2
+      - uses: Swatinem/rust-cache@v2
 
       - name: Install stable toolchain
         uses: dtolnay/rust-toolchain@stable
