@@ -215,7 +215,7 @@ fn download<W: Write>(res: &mut reqwest::blocking::Response, w: &mut W) -> anyho
         }
         progress += n;
         pb.set_position(progress as u64);
-        w.write(&buf[..n])?;
+        w.write_all(&buf[..n])?;
     }
 
     w.flush()?;
@@ -234,7 +234,7 @@ fn print_header(res: &reqwest::blocking::Response) -> anyhow::Result<()> {
     }
     for (key, val) in res.headers().iter() {
         write!(out, "{}: ", key)?;
-        out.write(val.as_bytes())?;
+        out.write_all(val.as_bytes())?;
         writeln!(out)?;
     }
     writeln!(out)?;
