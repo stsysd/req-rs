@@ -132,20 +132,17 @@ impl Opt {
             fs::read_to_string(self.input.as_str())
                 .context(format!("fail to open file: {}", self.input))?
         };
-        let definitions = toml::from_str::<Req>(input.as_str())
+        let req = toml::from_str::<Req>(input.as_str())
             .context(format!("malformed file: {}", self.input))?;
 
         if self.name.is_none() {
-            print!("{}", definitions.display_tasks());
+            print!("{}", req.display_tasks());
             return Ok(ExitCode::SUCCESS);
         }
 
         let name = self.name.as_ref().unwrap();
-        let definitions = definitions.with_values(self.variables.clone());
-        let task = if let Some(task) = definitions
-            .get_task(name)
-            .context("fail to resolve context")?
-        {
+        let req = req.with_values(self.variables.clone());
+        let task = if let Some(task) = req.get_task(name).context("fail to resolve context")? {
             Ok(task)
         } else {
             Err(anyhow!("task `{}` is not defined", name))
@@ -162,21 +159,16 @@ impl Opt {
         }
 
         let mut res = task.send().context("fail to send request")?;
+        let mut buf = vec![];
+        download(&mut res, &mut buf)?;
+        if self.include_header {
+            print_header(&res)?;
+        }
+
         if let Some(ref path) = self.output {
-            let f = std::fs::File::create(path)?;
-            let mut w = BufWriter::new(f);
-            download(&mut res, &mut w)?;
-            if self.include_header {
-                print_header(&res)?;
-            }
+            std::fs::File::create(path)?.write_all(&buf)?;
         } else {
-            let mut buf = vec![];
-            download(&mut res, &mut buf)?;
-            if self.include_header {
-                print_header(&res)?;
-            }
-            let mut out = BufWriter::new(w);
-            out.write(&buf)?;
+            w.write_all(&buf)?;
         }
 
         let s = res.status();
@@ -218,7 +210,7 @@ fn download<W: Write>(res: &mut reqwest::blocking::Response, w: &mut W) -> anyho
         }
         progress += n;
         pb.set_position(progress as u64);
-        w.write(&buf[..n])?;
+        w.write_all(&buf[..n])?;
     }
 
     w.flush()?;
@@ -237,7 +229,7 @@ fn print_header(res: &reqwest::blocking::Response) -> anyhow::Result<()> {
     }
     for (key, val) in res.headers().iter() {
         write!(out, "{}: ", key)?;
-        out.write(val.as_bytes())?;
+        out.write_all(val.as_bytes())?;
         writeln!(out)?;
     }
     writeln!(out)?;
@@ -324,7 +316,7 @@ mod tests {
 
                 [tasks.get_with_queries.queries]
                 foo = "FOO"
-                bar = "BAR"
+                bar = ["BAR", "BAZ"]
             "#,
             server.address(),
         );
@@ -333,7 +325,8 @@ mod tests {
             when.method(Method::GET)
                 .path("/get_with_queries")
                 .query_param("foo", "FOO")
-                .query_param("bar", "BAR");
+                .query_param("bar", "BAR")
+                .query_param("bar", "BAZ");
             then.status(200).body("ok");
         });
 
@@ -354,6 +347,7 @@ mod tests {
 
                 [tasks.get_with_headers.headers]
                 "X-Authorization" = "Bearer HOGE"
+                "FOO" = ["BAR", "BAZ"]
             "#,
             server.address(),
         );
@@ -361,7 +355,9 @@ mod tests {
         let mock = server.mock(|when, then| {
             when.method(Method::GET)
                 .path("/get_with_headers")
-                .header("X-Authorization", "Bearer HOGE");
+                .header("X-Authorization", "Bearer HOGE")
+                .header("FOO", "BAR")
+                .header("FOO", "BAZ");
             then.status(200).body("ok");
         });
 
@@ -519,7 +515,7 @@ mod tests {
                 .body_contains(String::from_utf8(content).unwrap());
             then.status(200).body("ok");
         });
-        
+
         let code = opt
             .exec(&mut input.as_bytes(), &mut std::io::empty())
             .unwrap();
@@ -542,13 +538,12 @@ mod tests {
         );
         let opt = Opt::try_parse_from(vec!["req", "-f", "-", "redirect"]).unwrap();
         let mock_first = server.mock(|when, then| {
-            when.method(Method::GET)
-                .path("/redirect/0");
-            then.status(302).header("Location", server.url("/redirect/1"));
+            when.method(Method::GET).path("/redirect/0");
+            then.status(302)
+                .header("Location", server.url("/redirect/1"));
         });
         let mock_second = server.mock(|when, then| {
-            when.method(Method::GET)
-                .path("/redirect/1");
+            when.method(Method::GET).path("/redirect/1");
             then.status(200).body("ok");
         });
 
@@ -575,18 +570,17 @@ mod tests {
         );
         let opt = Opt::try_parse_from(vec!["req", "-f", "-", "redirect"]).unwrap();
         let mock_first = server.mock(|when, then| {
-            when.method(Method::GET)
-                .path("/redirect/0");
-            then.status(302).header("Location", server.url("/redirect/1"));
+            when.method(Method::GET).path("/redirect/0");
+            then.status(302)
+                .header("Location", server.url("/redirect/1"));
         });
         let mock_second = server.mock(|when, then| {
-            when.method(Method::GET)
-                .path("/redirect/1");
-            then.status(302).header("Location", server.url("/redirect/2"));
+            when.method(Method::GET).path("/redirect/1");
+            then.status(302)
+                .header("Location", server.url("/redirect/2"));
         });
 
-        let res = opt
-            .exec(&mut input.as_bytes(), &mut std::io::empty());
+        let res = opt.exec(&mut input.as_bytes(), &mut std::io::empty());
 
         mock_first.assert();
         mock_second.assert();
