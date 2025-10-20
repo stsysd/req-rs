@@ -81,7 +81,9 @@ $ req create-user
 
 ### 2. Working with Authentication
 
-Use variables to manage API tokens:
+**Bearer Token Authentication:**
+
+Most modern APIs use Bearer token authentication. Use variables to manage tokens securely:
 
 ```toml
 [variables]
@@ -90,14 +92,37 @@ TOKEN = "your-api-token-here"
 [tasks.authenticated]
 GET = 'https://api.example.com/protected'
 
-[tasks.authenticated.headers]
-Authorization = "Bearer ${TOKEN}"
+[tasks.authenticated.auth]
+bearer = "${TOKEN}"
 ```
 
-Override variables from command line:
+Override tokens from command line:
 
 ```shell
 $ req authenticated -v TOKEN=different-token
+```
+
+**Basic Authentication:**
+
+For APIs requiring username and password:
+
+```toml
+[variables]
+USERNAME = "admin"
+PASSWORD = "secret"
+
+[tasks.basic-auth]
+GET = 'https://api.example.com/admin'
+
+[tasks.basic-auth.auth.basic]
+username = "${USERNAME}"
+password = "${PASSWORD}"
+```
+
+Override credentials from command line:
+
+```shell
+$ req basic-auth -v USERNAME=user -v PASSWORD=pass
 ```
 
 ### 3. Managing Multiple Environments

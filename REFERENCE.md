@@ -163,6 +163,27 @@ file-to-upload.file = "/path/to/upload/file"
 text = "plain text"
 ```
 
+### tasks.{NAME}.auth.bearer = {STRING}
+
+Specify Bearer token authentication. This automatically adds `Authorization: Bearer <token>` header to the request.
+
+```toml
+[tasks.with-bearer.auth]
+bearer = "your-token-here"
+```
+
+### tasks.{NAME}.auth.basic.username = {STRING}
+
+### tasks.{NAME}.auth.basic.password = {STRING}
+
+Specify Basic authentication with username and password. This automatically adds `Authorization: Basic <base64-encoded-credentials>` header to the request.
+
+```toml
+[tasks.with-basic.auth.basic]
+username = "admin"
+password = "secret"
+```
+
 ### tasks.{NAME}.config
 
 Specify configure for each task.
