@@ -1587,6 +1587,7 @@ name = "req-rs"
 version = "0.5.1"
 dependencies = [
  "anyhow",
+ "base64 0.22.1",
  "clap",
  "httpmock",
  "indicatif",

@@ -2,6 +2,7 @@ use crate::interpolation::{
     create_interpolation_context, interpolate, InterpContext, InterpResult,
 };
 use anyhow::Context;
+use base64::Engine;
 use reqwest::blocking::{multipart, Client, ClientBuilder, Request, Response};
 use reqwest::Method;
 use serde_json::value::Value;
@@ -79,6 +80,36 @@ struct ReqConfig {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "lowercase")]
+enum ReqAuth {
+    Bearer(String),
+    Basic { username: String, password: String },
+}
+
+impl ReqAuth {
+    fn interpolate(&self, ctxt: &InterpContext) -> InterpResult<Self> {
+        Ok(match self {
+            ReqAuth::Bearer(token) => ReqAuth::Bearer(interpolate(token, ctxt)?),
+            ReqAuth::Basic { username, password } => ReqAuth::Basic {
+                username: interpolate(username, ctxt)?,
+                password: interpolate(password, ctxt)?,
+            },
+        })
+    }
+
+    fn authorization_header(&self) -> String {
+        match self {
+            ReqAuth::Bearer(token) => format!("Bearer {}", token),
+            ReqAuth::Basic { username, password } => {
+                let credentials = format!("{}:{}", username, password);
+                let encoded = base64::engine::general_purpose::STANDARD.encode(credentials);
+                format!("Basic {}", encoded)
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
 pub struct ReqTask {
     #[serde(flatten)]
     method: ReqMethod,
@@ -94,6 +125,9 @@ pub struct ReqTask {
 
     #[serde(default)]
     description: String,
+
+    #[serde(default)]
+    auth: Option<ReqAuth>,
 
     #[serde(default)]
     config: Option<ReqConfig>,
@@ -236,12 +270,14 @@ impl ReqTask {
             ref queries,
             ref body,
             description,
+            ref auth,
             config,
         } = self;
         let method = method.interpolatte(ctxt)?;
         let headers = interpolate_btree_map(headers, ctxt)?;
         let queries = interpolate_btree_map(queries, ctxt)?;
         let body = body.interpolate(ctxt)?;
+        let auth = auth.as_ref().map(|a| a.interpolate(ctxt)).transpose()?;
 
         Ok(ReqTask {
             method,
@@ -249,6 +285,7 @@ impl ReqTask {
             queries,
             body,
             description: description.clone(),
+            auth,
             config: config.clone(),
         })
     }
@@ -280,6 +317,10 @@ impl ReqTask {
                 builder.multipart(form)
             }
         };
+
+        if let Some(ref auth) = self.auth {
+            builder = builder.header("Authorization", auth.authorization_header());
+        }
 
         for (k, v) in self.headers.iter() {
             for s in v.iter() {
