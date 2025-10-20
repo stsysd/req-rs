@@ -706,12 +706,10 @@ mod tests {
         writeln!(env_file, "PATH=/test").unwrap();
         env_file.flush().unwrap();
 
-        let input = format!(
-            r#"
-                [tasks.test]
-                GET = "${{BASE_URL}}${{PATH}}"
-            "#,
-        );
+        let input = r#"
+            [tasks.test]
+            GET = "${BASE_URL}${PATH}"
+        "#;
         let opt = Opt::try_parse_from(vec![
             "req",
             "-f",
