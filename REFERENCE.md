@@ -55,7 +55,7 @@ Include response headers in the output
 ### -v, --var
 
 Pass variable in the form `KEY=VALUE`.
-This option can be specified multple times.
+This option can be specified multiple times.
 
 ### --dryrun
 
