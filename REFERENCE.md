@@ -129,7 +129,7 @@ Specify request plain text body with `Content-Type: text/plain`.
 
 ```toml
 [tasks.with-plain-text.body]
-plain = "seinding body"
+plain = "sending body"
 ```
 
 ### tasks.{NAME}.body.json = {OBJECT}
