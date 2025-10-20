@@ -108,6 +108,14 @@ struct Opt {
     )]
     variables: Vec<(String, String)>,
 
+    #[arg(
+        name = "FILE",
+        short = 'e',
+        long = "env-file",
+        help = "Load variables from environment file"
+    )]
+    env_file: Option<String>,
+
     #[arg(long, help = "Print compatible curl command (experimental)")]
     curl: bool,
 
@@ -141,7 +149,21 @@ impl Opt {
         }
 
         let name = self.name.as_ref().unwrap();
-        let req = req.with_values(self.variables.clone());
+
+        // Load env file: --env-file takes precedence over config.env-file
+        let mut env_vars = vec![];
+        let env_file_path = self.env_file.as_deref().or_else(|| req.env_file());
+
+        if let Some(path) = env_file_path {
+            let vars = load_env_file(path)
+                .context(format!("fail to load env file: {}", path))?;
+            env_vars.extend(vars);
+        }
+
+        // Apply -v variables (overrides env file)
+        env_vars.extend(self.variables.clone());
+
+        let req = req.with_values(env_vars);
         let task = if let Some(task) = req.get_task(name).context("fail to resolve context")? {
             Ok(task)
         } else {
@@ -178,6 +200,15 @@ impl Opt {
             Ok(ExitCode::FAILURE)
         }
     }
+}
+
+fn load_env_file(path: &str) -> anyhow::Result<Vec<(String, String)>> {
+    let mut vars = vec![];
+    for item in dotenvy::from_path_iter(path)? {
+        let (key, value) = item?;
+        vars.push((key, value));
+    }
+    Ok(vars)
 }
 
 fn main() -> anyhow::Result<ExitCode> {
@@ -656,6 +687,156 @@ mod tests {
             when.method(Method::GET)
                 .path("/basic_auth")
                 .header("Authorization", expected_header);
+            then.status(200).body("ok");
+        });
+
+        let code = opt
+            .exec(&mut input.as_bytes(), &mut std::io::empty())
+            .unwrap();
+
+        mock.assert();
+        assert_eq!(code, ExitCode::SUCCESS);
+    }
+
+    #[rstest]
+    fn test_env_file_from_cli(server: MockServer) {
+        use std::io::Write;
+        let mut env_file = tempfile::NamedTempFile::new().unwrap();
+        writeln!(env_file, "BASE_URL=http://{}", server.address()).unwrap();
+        writeln!(env_file, "PATH=/test").unwrap();
+        env_file.flush().unwrap();
+
+        let input = format!(
+            r#"
+                [tasks.test]
+                GET = "${{BASE_URL}}${{PATH}}"
+            "#,
+        );
+        let opt = Opt::try_parse_from(vec![
+            "req",
+            "-f",
+            "-",
+            "-e",
+            env_file.path().to_str().unwrap(),
+            "test",
+        ])
+        .unwrap();
+        let mock = server.mock(|when, then| {
+            when.method(Method::GET).path("/test");
+            then.status(200).body("ok");
+        });
+
+        let code = opt
+            .exec(&mut input.as_bytes(), &mut std::io::empty())
+            .unwrap();
+
+        mock.assert();
+        assert_eq!(code, ExitCode::SUCCESS);
+    }
+
+    #[rstest]
+    fn test_env_file_from_config(server: MockServer) {
+        use std::io::Write;
+        let mut env_file = tempfile::NamedTempFile::new().unwrap();
+        writeln!(env_file, "BASE_URL=http://{}", server.address()).unwrap();
+        writeln!(env_file, "PATH=/test").unwrap();
+        env_file.flush().unwrap();
+
+        let input = format!(
+            r#"
+                [config]
+                env-file = "{}"
+
+                [tasks.test]
+                GET = "${{BASE_URL}}${{PATH}}"
+            "#,
+            env_file.path().to_str().unwrap().replace("\\", "\\\\"),
+        );
+        let opt = Opt::try_parse_from(vec!["req", "-f", "-", "test"]).unwrap();
+        let mock = server.mock(|when, then| {
+            when.method(Method::GET).path("/test");
+            then.status(200).body("ok");
+        });
+
+        let code = opt
+            .exec(&mut input.as_bytes(), &mut std::io::empty())
+            .unwrap();
+
+        mock.assert();
+        assert_eq!(code, ExitCode::SUCCESS);
+    }
+
+    #[rstest]
+    fn test_env_file_cli_overrides_config(server: MockServer) {
+        use std::io::Write;
+        let mut env_file1 = tempfile::NamedTempFile::new().unwrap();
+        writeln!(env_file1, "PATH=/from-config").unwrap();
+        env_file1.flush().unwrap();
+
+        let mut env_file2 = tempfile::NamedTempFile::new().unwrap();
+        writeln!(env_file2, "PATH=/from-cli").unwrap();
+        env_file2.flush().unwrap();
+
+        let input = format!(
+            r#"
+                [config]
+                env-file = "{}"
+
+                [tasks.test]
+                GET = "http://{}${{PATH}}"
+            "#,
+            env_file1.path().to_str().unwrap().replace("\\", "\\\\"),
+            server.address(),
+        );
+        let opt = Opt::try_parse_from(vec![
+            "req",
+            "-f",
+            "-",
+            "-e",
+            env_file2.path().to_str().unwrap(),
+            "test",
+        ])
+        .unwrap();
+        let mock = server.mock(|when, then| {
+            when.method(Method::GET).path("/from-cli");
+            then.status(200).body("ok");
+        });
+
+        let code = opt
+            .exec(&mut input.as_bytes(), &mut std::io::empty())
+            .unwrap();
+
+        mock.assert();
+        assert_eq!(code, ExitCode::SUCCESS);
+    }
+
+    #[rstest]
+    fn test_var_overrides_env_file(server: MockServer) {
+        use std::io::Write;
+        let mut env_file = tempfile::NamedTempFile::new().unwrap();
+        writeln!(env_file, "PATH=/from-env").unwrap();
+        env_file.flush().unwrap();
+
+        let input = format!(
+            r#"
+                [tasks.test]
+                GET = "http://{}${{PATH}}"
+            "#,
+            server.address(),
+        );
+        let opt = Opt::try_parse_from(vec![
+            "req",
+            "-f",
+            "-",
+            "-e",
+            env_file.path().to_str().unwrap(),
+            "-v",
+            "PATH=/from-var",
+            "test",
+        ])
+        .unwrap();
+        let mock = server.mock(|when, then| {
+            when.method(Method::GET).path("/from-var");
             then.status(200).body("ok");
         });
 

@@ -71,12 +71,37 @@ impl IntoIterator for ReqParam {
     }
 }
 
+#[derive(Debug, Clone, Deserialize)]
+#[serde(untagged)]
+enum EnvFile {
+    Bool(bool),
+    Path(String),
+}
+
+impl Default for EnvFile {
+    fn default() -> Self {
+        EnvFile::Bool(false)
+    }
+}
+
+impl EnvFile {
+    fn path(&self) -> Option<&str> {
+        match self {
+            EnvFile::Bool(true) => Some(".env"),
+            EnvFile::Bool(false) => None,
+            EnvFile::Path(s) => Some(s.as_str()),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Deserialize, Default)]
 struct ReqConfig {
     #[serde(default)]
     insecure: bool,
     #[serde(default)]
     redirect: usize,
+    #[serde(default, rename = "env-file")]
+    env_file: EnvFile,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -382,6 +407,10 @@ impl ReqTask {
 }
 
 impl Req {
+    pub fn env_file(&self) -> Option<&str> {
+        self.config.as_ref().and_then(|c| c.env_file.path())
+    }
+
     pub fn get_task(self, name: &str) -> InterpResult<Option<ReqTask>> {
         let Req {
             tasks,
