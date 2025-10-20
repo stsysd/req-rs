@@ -604,4 +604,66 @@ mod tests {
 
         assert_eq!(code, ExitCode::SUCCESS);
     }
+
+    #[rstest]
+    fn test_bearer_auth(server: MockServer) {
+        let input = format!(
+            r#"
+                [tasks.bearer_auth]
+                GET = "http://{}/bearer_auth"
+
+                [tasks.bearer_auth.auth]
+                bearer = "test-token-123"
+            "#,
+            server.address(),
+        );
+        let opt = Opt::try_parse_from(vec!["req", "-f", "-", "bearer_auth"]).unwrap();
+        let mock = server.mock(|when, then| {
+            when.method(Method::GET)
+                .path("/bearer_auth")
+                .header("Authorization", "Bearer test-token-123");
+            then.status(200).body("ok");
+        });
+
+        let code = opt
+            .exec(&mut input.as_bytes(), &mut std::io::empty())
+            .unwrap();
+
+        mock.assert();
+        assert_eq!(code, ExitCode::SUCCESS);
+    }
+
+    #[rstest]
+    fn test_basic_auth(server: MockServer) {
+        let input = format!(
+            r#"
+                [tasks.basic_auth]
+                GET = "http://{}/basic_auth"
+
+                [tasks.basic_auth.auth.basic]
+                username = "admin"
+                password = "secret"
+            "#,
+            server.address(),
+        );
+        let opt = Opt::try_parse_from(vec!["req", "-f", "-", "basic_auth"]).unwrap();
+
+        use base64::Engine;
+        let credentials = base64::engine::general_purpose::STANDARD.encode("admin:secret");
+        let expected_header = format!("Basic {}", credentials);
+
+        let mock = server.mock(|when, then| {
+            when.method(Method::GET)
+                .path("/basic_auth")
+                .header("Authorization", expected_header);
+            then.status(200).body("ok");
+        });
+
+        let code = opt
+            .exec(&mut input.as_bytes(), &mut std::io::empty())
+            .unwrap();
+
+        mock.assert();
+        assert_eq!(code, ExitCode::SUCCESS);
+    }
 }
