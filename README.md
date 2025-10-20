@@ -127,7 +127,60 @@ $ req basic-auth -v USERNAME=user -v PASSWORD=pass
 
 ### 3. Managing Multiple Environments
 
-Create separate config files for each environment:
+**Using Environment Files:**
+
+The recommended way to manage multiple environments is to use `.env` files:
+
+```shell
+# .env.dev
+BASE_URL=https://dev.api.example.com
+API_TOKEN=dev-token-123
+```
+
+```shell
+# .env.prod
+BASE_URL=https://api.example.com
+API_TOKEN=prod-token-xyz
+```
+
+```toml
+# req.toml
+[tasks.api-call]
+GET = "${BASE_URL}/endpoint"
+
+[tasks.api-call.auth]
+bearer = "${API_TOKEN}"
+```
+
+Switch between environments:
+
+```shell
+$ req api-call -e .env.dev
+$ req api-call -e .env.prod
+```
+
+**Auto-loading .env file:**
+
+You can configure req to automatically load a `.env` file:
+
+```toml
+[config]
+env-file = true  # Loads .env by default
+
+[tasks.api-call]
+GET = "${BASE_URL}/endpoint"
+```
+
+Or specify a custom default env file:
+
+```toml
+[config]
+env-file = ".env.development"  # Loads .env.development by default
+```
+
+**Using Separate Config Files:**
+
+Alternatively, you can create separate config files for each environment:
 
 ```toml
 # req.dev.toml

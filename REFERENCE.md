@@ -57,6 +57,16 @@ Include response headers in the output
 Pass variable in the form `KEY=VALUE`.
 This option can be specified multiple times.
 
+### -e, --env-file `<FILE>`
+
+Load variables from environment file (dotenv format).
+Variables specified with `-v` option will override variables from env file.
+
+```shell
+$ req task-name -e .env.dev
+$ req task-name -e .env.prod -v API_TOKEN=override-token
+```
+
 ### --dryrun
 
 Dump internal structure of specified task without sending request.
@@ -222,3 +232,21 @@ If `true`, ignore verifying the SSL certificate. (default: `false`)
 ### config.redirect = {INTEGER >= 0}
 
 Specify a maximum number of redirects. (default: `0`)
+
+### config.env-file = {BOOLEAN | STRING}
+
+Specify default environment file to load variables from.
+
+- `false`: Do not load any env file by default (default behavior)
+- `true`: Load `.env` file if it exists
+- `{STRING}`: Load the specified file path
+
+Variables loaded from env file can be overridden by `-v` option.
+
+```toml
+[config]
+env-file = true  # Loads .env
+
+# Or specify custom file
+env-file = ".env.development"
+```
