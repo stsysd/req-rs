@@ -51,7 +51,7 @@ enum ReqParam {
 }
 
 impl ReqParam {
-    fn iter(&self) -> std::slice::Iter<String> {
+    fn iter(&self) -> std::slice::Iter<'_, String> {
         match self {
             ReqParam::Single(s) => std::slice::from_ref(s).iter(),
             ReqParam::Multiple(ss) => ss.iter(),
