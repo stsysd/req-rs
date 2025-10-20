@@ -185,7 +185,7 @@ GET = "https://${DOMAIN}"
 
 [tasks.interp.headers]
 Authorization = "Bearer ${TOKEN}"
-# => resolved by `AUthorization = "Bearer XXXX-XXXX"`
+# => resolved by `Authorization = "Bearer XXXX-XXXX"`
 
 [tasks.interp.queries]
 "${KEY}" = "value"
