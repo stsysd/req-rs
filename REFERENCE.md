@@ -94,7 +94,7 @@ Define a task named `{NAME}`.
 
 ### tasks.{NAME}.description
 
-Speify description for the task.
+Specify description for the task.
 
 ### tasks.{NAME}.GET = {URL}
 
