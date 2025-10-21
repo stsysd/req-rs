@@ -19,7 +19,7 @@ serde_derive = "1"
 regex = "1"
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }
-indicatif = "0.17"
+indicatif = "0.18"
 base64 = "0.22.1"
 dotenvy = "0.15.7"
 
