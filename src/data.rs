@@ -453,3 +453,111 @@ impl Req {
         strings.join("\n")
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn test_interpolate_toml_value_string() {
+        let mut vars = BTreeMap::new();
+        vars.insert("name".to_string(), "world".to_string());
+        let ctxt = create_interpolation_context(vars).unwrap();
+
+        let input = json!("Hello, ${name}!");
+        let result = interpolate_toml_value(&input, &ctxt).unwrap();
+        assert_eq!(result, json!("Hello, world!"));
+    }
+
+    #[test]
+    fn test_interpolate_toml_value_array() {
+        let mut vars = BTreeMap::new();
+        vars.insert("x".to_string(), "foo".to_string());
+        vars.insert("y".to_string(), "bar".to_string());
+        let ctxt = create_interpolation_context(vars).unwrap();
+
+        let input = json!(["${x}", "${y}", "baz"]);
+        let result = interpolate_toml_value(&input, &ctxt).unwrap();
+        assert_eq!(result, json!(["foo", "bar", "baz"]));
+    }
+
+    #[test]
+    fn test_interpolate_toml_value_object() {
+        let mut vars = BTreeMap::new();
+        vars.insert("key".to_string(), "mykey".to_string());
+        vars.insert("value".to_string(), "myvalue".to_string());
+        let ctxt = create_interpolation_context(vars).unwrap();
+
+        let input = json!({
+            "${key}": "${value}",
+            "static": "data"
+        });
+        let result = interpolate_toml_value(&input, &ctxt).unwrap();
+        assert_eq!(result, json!({
+            "mykey": "myvalue",
+            "static": "data"
+        }));
+    }
+
+    #[test]
+    fn test_interpolate_toml_value_nested() {
+        let mut vars = BTreeMap::new();
+        vars.insert("user".to_string(), "alice".to_string());
+        vars.insert("age".to_string(), "30".to_string());
+        let ctxt = create_interpolation_context(vars).unwrap();
+
+        let input = json!({
+            "users": [
+                {"name": "${user}", "age": "${age}"},
+                {"name": "bob", "age": "25"}
+            ],
+            "count": 2
+        });
+        let result = interpolate_toml_value(&input, &ctxt).unwrap();
+        assert_eq!(result, json!({
+            "users": [
+                {"name": "alice", "age": "30"},
+                {"name": "bob", "age": "25"}
+            ],
+            "count": 2
+        }));
+    }
+
+    #[test]
+    fn test_interpolate_toml_value_preserves_non_string() {
+        let vars = BTreeMap::new();
+        let ctxt = create_interpolation_context(vars).unwrap();
+
+        let input = json!({
+            "number": 42,
+            "float": 3.14,
+            "bool": true,
+            "null": null,
+            "array": [1, 2, 3]
+        });
+        let result = interpolate_toml_value(&input, &ctxt).unwrap();
+        assert_eq!(result, input);
+    }
+
+    #[test]
+    fn test_interpolate_toml_value_mixed_types() {
+        let mut vars = BTreeMap::new();
+        vars.insert("msg".to_string(), "hello".to_string());
+        let ctxt = create_interpolation_context(vars).unwrap();
+
+        let input = json!({
+            "message": "${msg}",
+            "count": 5,
+            "active": true,
+            "items": ["${msg}", 123, false]
+        });
+        let result = interpolate_toml_value(&input, &ctxt).unwrap();
+        assert_eq!(result, json!({
+            "message": "hello",
+            "count": 5,
+            "active": true,
+            "items": ["hello", 123, false]
+        }));
+    }
+}
