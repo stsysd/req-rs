@@ -100,10 +100,8 @@ enum ReqProxyUrl {
     Simple(String),
     Detailed {
         url: String,
-        #[serde(default)]
-        username: Option<String>,
-        #[serde(default)]
-        password: Option<String>,
+        username: String,
+        password: String,
     },
 }
 
@@ -117,14 +115,8 @@ impl ReqProxyUrl {
                 password,
             } => ReqProxyUrl::Detailed {
                 url: interpolate(url, ctxt)?,
-                username: username
-                    .as_ref()
-                    .map(|u| interpolate(u, ctxt))
-                    .transpose()?,
-                password: password
-                    .as_ref()
-                    .map(|p| interpolate(p, ctxt))
-                    .transpose()?,
+                username: interpolate(username, ctxt)?,
+                password: interpolate(password, ctxt)?,
             },
         })
     }
@@ -140,11 +132,10 @@ impl ReqProxyUrl {
         match self {
             ReqProxyUrl::Simple(_) => None,
             ReqProxyUrl::Detailed {
-                username: Some(u),
-                password: Some(p),
+                username,
+                password,
                 ..
-            } => Some((u, p)),
-            _ => None,
+            } => Some((username, password)),
         }
     }
 }
@@ -735,8 +726,8 @@ mod tests {
         match &proxy_url {
             ReqProxyUrl::Detailed { url, username, password } => {
                 assert_eq!(url, "http://proxy.example.com:8080");
-                assert_eq!(username.as_deref(), Some("user"));
-                assert_eq!(password.as_deref(), Some("pass"));
+                assert_eq!(username, "user");
+                assert_eq!(password, "pass");
             }
             _ => panic!("Expected Detailed variant"),
         }
