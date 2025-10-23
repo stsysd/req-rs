@@ -692,8 +692,6 @@ mod tests {
 
     #[test]
     fn test_proxy_url_simple() {
-        use serde::Deserialize;
-
         #[derive(Deserialize)]
         struct TestConfig {
             proxy: ReqProxyUrl,
@@ -758,8 +756,6 @@ mod tests {
 
     #[test]
     fn test_proxy_simple() {
-        use serde::Deserialize;
-
         #[derive(Deserialize)]
         struct TestConfig {
             proxy: ReqProxy,
