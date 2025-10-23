@@ -94,6 +94,111 @@ impl EnvFile {
     }
 }
 
+#[derive(Debug, Clone, Deserialize)]
+#[serde(untagged)]
+enum ReqProxyUrl {
+    Simple(String),
+    Detailed {
+        url: String,
+        username: String,
+        password: String,
+    },
+}
+
+impl ReqProxyUrl {
+    fn interpolate(&self, ctxt: &InterpContext) -> InterpResult<Self> {
+        Ok(match self {
+            ReqProxyUrl::Simple(url) => ReqProxyUrl::Simple(interpolate(url, ctxt)?),
+            ReqProxyUrl::Detailed {
+                url,
+                username,
+                password,
+            } => ReqProxyUrl::Detailed {
+                url: interpolate(url, ctxt)?,
+                username: interpolate(username, ctxt)?,
+                password: interpolate(password, ctxt)?,
+            },
+        })
+    }
+
+    fn url(&self) -> &str {
+        match self {
+            ReqProxyUrl::Simple(url) => url,
+            ReqProxyUrl::Detailed { url, .. } => url,
+        }
+    }
+
+    fn credentials(&self) -> Option<(&str, &str)> {
+        match self {
+            ReqProxyUrl::Simple(_) => None,
+            ReqProxyUrl::Detailed {
+                username,
+                password,
+                ..
+            } => Some((username, password)),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(untagged)]
+enum ReqProxy {
+    Simple(ReqProxyUrl),
+    Detailed {
+        #[serde(default)]
+        http: Option<ReqProxyUrl>,
+        #[serde(default)]
+        https: Option<ReqProxyUrl>,
+    },
+}
+
+impl ReqProxy {
+    fn interpolate(&self, ctxt: &InterpContext) -> InterpResult<Self> {
+        Ok(match self {
+            ReqProxy::Simple(proxy_url) => ReqProxy::Simple(proxy_url.interpolate(ctxt)?),
+            ReqProxy::Detailed { http, https } => ReqProxy::Detailed {
+                http: http
+                    .as_ref()
+                    .map(|p| p.interpolate(ctxt))
+                    .transpose()?,
+                https: https
+                    .as_ref()
+                    .map(|p| p.interpolate(ctxt))
+                    .transpose()?,
+            },
+        })
+    }
+
+    fn apply_to_client(&self, mut builder: ClientBuilder) -> anyhow::Result<ClientBuilder> {
+        match self {
+            ReqProxy::Simple(proxy_url) => {
+                let mut proxy = reqwest::Proxy::all(proxy_url.url())?;
+                if let Some((username, password)) = proxy_url.credentials() {
+                    proxy = proxy.basic_auth(username, password);
+                }
+                builder = builder.proxy(proxy);
+            }
+            ReqProxy::Detailed { http, https } => {
+                if let Some(proxy_url) = http {
+                    let mut proxy = reqwest::Proxy::http(proxy_url.url())?;
+                    if let Some((username, password)) = proxy_url.credentials() {
+                        proxy = proxy.basic_auth(username, password);
+                    }
+                    builder = builder.proxy(proxy);
+                }
+                if let Some(proxy_url) = https {
+                    let mut proxy = reqwest::Proxy::https(proxy_url.url())?;
+                    if let Some((username, password)) = proxy_url.credentials() {
+                        proxy = proxy.basic_auth(username, password);
+                    }
+                    builder = builder.proxy(proxy);
+                }
+            }
+        }
+        Ok(builder)
+    }
+}
+
 #[derive(Debug, Clone, Deserialize, Default)]
 struct ReqConfig {
     #[serde(default)]
@@ -102,6 +207,8 @@ struct ReqConfig {
     redirect: usize,
     #[serde(default, rename = "env-file")]
     env_file: EnvFile,
+    #[serde(default)]
+    proxy: Option<ReqProxy>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -268,13 +375,26 @@ impl ReqBody {
 }
 
 impl ReqConfig {
+    fn interpolate(&self, ctxt: &InterpContext) -> InterpResult<Self> {
+        Ok(ReqConfig {
+            insecure: self.insecure,
+            redirect: self.redirect,
+            env_file: self.env_file.clone(),
+            proxy: self
+                .proxy
+                .as_ref()
+                .map(|p| p.interpolate(ctxt))
+                .transpose()?,
+        })
+    }
+
     fn client(&self) -> anyhow::Result<Client> {
         let policy = if self.redirect > 0 {
             reqwest::redirect::Policy::limited(self.redirect)
         } else {
             reqwest::redirect::Policy::none()
         };
-        Ok(ClientBuilder::new()
+        let mut builder = ClientBuilder::new()
             .danger_accept_invalid_certs(self.insecure)
             .user_agent(format!(
                 "{}/{}",
@@ -282,8 +402,13 @@ impl ReqConfig {
                 env!("CARGO_PKG_VERSION")
             ))
             .redirect(policy)
-            .timeout(None)
-            .build()?)
+            .timeout(None);
+
+        if let Some(ref proxy) = self.proxy {
+            builder = proxy.apply_to_client(builder)?;
+        }
+
+        Ok(builder.build()?)
     }
 }
 
@@ -296,13 +421,17 @@ impl ReqTask {
             ref body,
             description,
             ref auth,
-            config,
+            ref config,
         } = self;
         let method = method.interpolatte(ctxt)?;
         let headers = interpolate_btree_map(headers, ctxt)?;
         let queries = interpolate_btree_map(queries, ctxt)?;
         let body = body.interpolate(ctxt)?;
         let auth = auth.as_ref().map(|a| a.interpolate(ctxt)).transpose()?;
+        let config = config
+            .as_ref()
+            .map(|c| c.interpolate(ctxt))
+            .transpose()?;
 
         Ok(ReqTask {
             method,
@@ -311,7 +440,7 @@ impl ReqTask {
             body,
             description: description.clone(),
             auth,
-            config: config.clone(),
+            config,
         })
     }
 
@@ -451,5 +580,296 @@ impl Req {
             strings.push(format!("{k}\t{desc}"));
         }
         strings.join("\n")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn test_interpolate_toml_value_string() {
+        let mut vars = BTreeMap::new();
+        vars.insert("name".to_string(), "world".to_string());
+        let ctxt = create_interpolation_context(vars).unwrap();
+
+        let input = json!("Hello, ${name}!");
+        let result = interpolate_toml_value(&input, &ctxt).unwrap();
+        assert_eq!(result, json!("Hello, world!"));
+    }
+
+    #[test]
+    fn test_interpolate_toml_value_array() {
+        let mut vars = BTreeMap::new();
+        vars.insert("x".to_string(), "foo".to_string());
+        vars.insert("y".to_string(), "bar".to_string());
+        let ctxt = create_interpolation_context(vars).unwrap();
+
+        let input = json!(["${x}", "${y}", "baz"]);
+        let result = interpolate_toml_value(&input, &ctxt).unwrap();
+        assert_eq!(result, json!(["foo", "bar", "baz"]));
+    }
+
+    #[test]
+    fn test_interpolate_toml_value_object() {
+        let mut vars = BTreeMap::new();
+        vars.insert("key".to_string(), "mykey".to_string());
+        vars.insert("value".to_string(), "myvalue".to_string());
+        let ctxt = create_interpolation_context(vars).unwrap();
+
+        let input = json!({
+            "${key}": "${value}",
+            "static": "data"
+        });
+        let result = interpolate_toml_value(&input, &ctxt).unwrap();
+        assert_eq!(result, json!({
+            "mykey": "myvalue",
+            "static": "data"
+        }));
+    }
+
+    #[test]
+    fn test_interpolate_toml_value_nested() {
+        let mut vars = BTreeMap::new();
+        vars.insert("user".to_string(), "alice".to_string());
+        vars.insert("age".to_string(), "30".to_string());
+        let ctxt = create_interpolation_context(vars).unwrap();
+
+        let input = json!({
+            "users": [
+                {"name": "${user}", "age": "${age}"},
+                {"name": "bob", "age": "25"}
+            ],
+            "count": 2
+        });
+        let result = interpolate_toml_value(&input, &ctxt).unwrap();
+        assert_eq!(result, json!({
+            "users": [
+                {"name": "alice", "age": "30"},
+                {"name": "bob", "age": "25"}
+            ],
+            "count": 2
+        }));
+    }
+
+    #[test]
+    fn test_interpolate_toml_value_preserves_non_string() {
+        let vars = BTreeMap::new();
+        let ctxt = create_interpolation_context(vars).unwrap();
+
+        let input = json!({
+            "number": 42,
+            "float": 0.1,
+            "bool": true,
+            "null": null,
+            "array": [1, 2, 3]
+        });
+        let result = interpolate_toml_value(&input, &ctxt).unwrap();
+        assert_eq!(result, input);
+    }
+
+    #[test]
+    fn test_interpolate_toml_value_mixed_types() {
+        let mut vars = BTreeMap::new();
+        vars.insert("msg".to_string(), "hello".to_string());
+        let ctxt = create_interpolation_context(vars).unwrap();
+
+        let input = json!({
+            "message": "${msg}",
+            "count": 5,
+            "active": true,
+            "items": ["${msg}", 123, false]
+        });
+        let result = interpolate_toml_value(&input, &ctxt).unwrap();
+        assert_eq!(result, json!({
+            "message": "hello",
+            "count": 5,
+            "active": true,
+            "items": ["hello", 123, false]
+        }));
+    }
+
+    #[test]
+    fn test_proxy_url_simple() {
+        #[derive(Deserialize)]
+        struct TestConfig {
+            proxy: ReqProxyUrl,
+        }
+
+        let toml_str = r#"proxy = "http://proxy.example.com:8080""#;
+        let config: TestConfig = toml::from_str(toml_str).unwrap();
+        let proxy_url = config.proxy;
+
+        match &proxy_url {
+            ReqProxyUrl::Simple(url) => {
+                assert_eq!(url, "http://proxy.example.com:8080");
+            }
+            _ => panic!("Expected Simple variant"),
+        }
+
+        assert_eq!(proxy_url.url(), "http://proxy.example.com:8080");
+        assert_eq!(proxy_url.credentials(), None);
+    }
+
+    #[test]
+    fn test_proxy_url_detailed_with_auth() {
+        let toml_str = r#"
+            url = "http://proxy.example.com:8080"
+            username = "user"
+            password = "pass"
+        "#;
+        let proxy_url: ReqProxyUrl = toml::from_str(toml_str).unwrap();
+
+        match &proxy_url {
+            ReqProxyUrl::Detailed { url, username, password } => {
+                assert_eq!(url, "http://proxy.example.com:8080");
+                assert_eq!(username, "user");
+                assert_eq!(password, "pass");
+            }
+            _ => panic!("Expected Detailed variant"),
+        }
+
+        assert_eq!(proxy_url.url(), "http://proxy.example.com:8080");
+        assert_eq!(proxy_url.credentials(), Some(("user", "pass")));
+    }
+
+    #[test]
+    fn test_proxy_url_interpolate() {
+        let mut vars = BTreeMap::new();
+        vars.insert("PROXY_URL".to_string(), "http://proxy.example.com:8080".to_string());
+        vars.insert("PROXY_USER".to_string(), "myuser".to_string());
+        vars.insert("PROXY_PASS".to_string(), "mypass".to_string());
+        let ctxt = create_interpolation_context(vars).unwrap();
+
+        let toml_str = r#"
+            url = "${PROXY_URL}"
+            username = "${PROXY_USER}"
+            password = "${PROXY_PASS}"
+        "#;
+        let proxy_url: ReqProxyUrl = toml::from_str(toml_str).unwrap();
+        let interpolated = proxy_url.interpolate(&ctxt).unwrap();
+
+        assert_eq!(interpolated.url(), "http://proxy.example.com:8080");
+        assert_eq!(interpolated.credentials(), Some(("myuser", "mypass")));
+    }
+
+    #[test]
+    fn test_proxy_simple() {
+        #[derive(Deserialize)]
+        struct TestConfig {
+            proxy: ReqProxy,
+        }
+
+        let toml_str = r#"proxy = "http://proxy.example.com:8080""#;
+        let config: TestConfig = toml::from_str(toml_str).unwrap();
+
+        match &config.proxy {
+            ReqProxy::Simple(_) => {},
+            _ => panic!("Expected Simple variant"),
+        }
+    }
+
+    #[test]
+    fn test_proxy_detailed() {
+        let toml_str = r#"
+            http = "http://http-proxy.example.com:8080"
+            https = "http://https-proxy.example.com:8443"
+        "#;
+        let proxy: ReqProxy = toml::from_str(toml_str).unwrap();
+
+        match &proxy {
+            ReqProxy::Detailed { http, https } => {
+                assert!(http.is_some());
+                assert!(https.is_some());
+                assert_eq!(http.as_ref().unwrap().url(), "http://http-proxy.example.com:8080");
+                assert_eq!(https.as_ref().unwrap().url(), "http://https-proxy.example.com:8443");
+            }
+            _ => panic!("Expected Detailed variant"),
+        }
+    }
+
+    #[test]
+    fn test_proxy_detailed_with_auth() {
+        let toml_str = r#"
+            [http]
+            url = "http://http-proxy.example.com:8080"
+            username = "http-user"
+            password = "http-pass"
+
+            [https]
+            url = "http://https-proxy.example.com:8443"
+            username = "https-user"
+            password = "https-pass"
+        "#;
+        let proxy: ReqProxy = toml::from_str(toml_str).unwrap();
+
+        match &proxy {
+            ReqProxy::Detailed { http, https } => {
+                assert!(http.is_some());
+                assert!(https.is_some());
+
+                let http_proxy = http.as_ref().unwrap();
+                assert_eq!(http_proxy.url(), "http://http-proxy.example.com:8080");
+                assert_eq!(http_proxy.credentials(), Some(("http-user", "http-pass")));
+
+                let https_proxy = https.as_ref().unwrap();
+                assert_eq!(https_proxy.url(), "http://https-proxy.example.com:8443");
+                assert_eq!(https_proxy.credentials(), Some(("https-user", "https-pass")));
+            }
+            _ => panic!("Expected Detailed variant"),
+        }
+    }
+
+    #[test]
+    fn test_proxy_interpolate() {
+        let mut vars = BTreeMap::new();
+        vars.insert("HTTP_PROXY".to_string(), "http://http-proxy.example.com:8080".to_string());
+        vars.insert("HTTPS_PROXY".to_string(), "http://https-proxy.example.com:8443".to_string());
+        let ctxt = create_interpolation_context(vars).unwrap();
+
+        let toml_str = r#"
+            http = "${HTTP_PROXY}"
+            https = "${HTTPS_PROXY}"
+        "#;
+        let proxy: ReqProxy = toml::from_str(toml_str).unwrap();
+        let interpolated = proxy.interpolate(&ctxt).unwrap();
+
+        match interpolated {
+            ReqProxy::Detailed { http, https } => {
+                assert_eq!(http.as_ref().unwrap().url(), "http://http-proxy.example.com:8080");
+                assert_eq!(https.as_ref().unwrap().url(), "http://https-proxy.example.com:8443");
+            }
+            _ => panic!("Expected Detailed variant"),
+        }
+    }
+
+    #[test]
+    fn test_config_with_proxy() {
+        let toml_str = r#"
+            insecure = true
+            redirect = 5
+            proxy = "http://proxy.example.com:8080"
+        "#;
+        let config: ReqConfig = toml::from_str(toml_str).unwrap();
+
+        assert!(config.insecure);
+        assert_eq!(config.redirect, 5);
+        assert!(config.proxy.is_some());
+    }
+
+    #[test]
+    fn test_config_proxy_interpolate() {
+        let mut vars = BTreeMap::new();
+        vars.insert("PROXY_URL".to_string(), "http://proxy.example.com:8080".to_string());
+        let ctxt = create_interpolation_context(vars).unwrap();
+
+        let toml_str = r#"
+            proxy = "${PROXY_URL}"
+        "#;
+        let config: ReqConfig = toml::from_str(toml_str).unwrap();
+        let interpolated = config.interpolate(&ctxt).unwrap();
+
+        assert!(interpolated.proxy.is_some());
     }
 }

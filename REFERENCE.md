@@ -250,3 +250,113 @@ env-file = true  # Loads .env
 # Or specify custom file
 env-file = ".env.development"
 ```
+
+### config.proxy = {STRING | OBJECT}
+
+Specify proxy server for both HTTP and HTTPS requests.
+
+As a string:
+```toml
+[config]
+proxy = "http://proxy.example.com:8080"
+```
+
+As an object with authentication:
+```toml
+[config.proxy]
+url = "http://proxy.example.com:8080"
+username = "myuser"
+password = "mypass"
+```
+
+### config.proxy.http = {STRING | OBJECT}
+
+### config.proxy.https = {STRING | OBJECT}
+
+Specify proxy server for HTTP or HTTPS requests separately. Both can be specified at the same time.
+
+As strings:
+```toml
+# HTTP only
+[config.proxy]
+http = "http://http-proxy.example.com:8080"
+
+# HTTPS only
+[config.proxy]
+https = "http://https-proxy.example.com:8443"
+
+# Both HTTP and HTTPS with different proxies
+[config.proxy]
+http = "http://http-proxy.example.com:8080"
+https = "http://https-proxy.example.com:8443"
+```
+
+As objects with authentication:
+```toml
+# HTTP with authentication
+[config.proxy.http]
+url = "http://http-proxy.example.com:8080"
+username = "http-user"
+password = "http-pass"
+
+# HTTPS with authentication
+[config.proxy.https]
+url = "http://https-proxy.example.com:8443"
+username = "https-user"
+password = "https-pass"
+
+# Mixed: HTTP without auth, HTTPS with auth
+[config.proxy]
+http = "http://http-proxy.example.com:8080"
+
+[config.proxy.https]
+url = "http://https-proxy.example.com:8443"
+username = "https-user"
+password = "https-pass"
+```
+
+Variable interpolation is supported:
+
+```toml
+[variables]
+PROXY_URL = "http://proxy.example.com:8080"
+
+[config]
+proxy = "${PROXY_URL}"
+
+# With authentication
+[variables]
+PROXY_URL = "http://proxy.example.com:8080"
+PROXY_USER = "myuser"
+PROXY_PASS = "mypass"
+
+[config.proxy]
+url = "${PROXY_URL}"
+username = "${PROXY_USER}"
+password = "${PROXY_PASS}"
+
+# Or in detailed form
+[variables]
+HTTP_PROXY = "http://http-proxy.example.com:8080"
+HTTPS_PROXY = "http://https-proxy.example.com:8443"
+HTTP_USER = "http-user"
+HTTPS_USER = "https-user"
+
+[config.proxy]
+http = "${HTTP_PROXY}"
+
+[config.proxy.https]
+url = "${HTTPS_PROXY}"
+username = "${HTTPS_USER}"
+password = "secret"
+```
+
+Task-level proxy configuration overrides global configuration:
+
+```toml
+[config]
+proxy = "http://global-proxy.example.com:8080"
+
+[tasks.special-task.config]
+proxy = "http://task-specific-proxy.example.com:8080"
+```
