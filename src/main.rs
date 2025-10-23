@@ -611,11 +611,13 @@ mod tests {
                 .header("Location", server.url("/redirect/2"));
         });
 
-        let res = opt.exec(&mut input.as_bytes(), &mut std::io::empty());
+        let code = opt
+            .exec(&mut input.as_bytes(), &mut std::io::empty())
+            .unwrap();
 
         mock_first.assert();
         mock_second.assert();
-        assert!(res.is_err(), "result: {:#?}", res);
+        assert_eq!(code, ExitCode::FAILURE);
     }
 
     #[rstest]
