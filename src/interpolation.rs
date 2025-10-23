@@ -137,4 +137,105 @@ mod tests {
             )),
         );
     }
+
+    #[test]
+    fn test_create_interpolation_context_simple() {
+        let mut vars = BTreeMap::new();
+        vars.insert("key1".into(), "value1".into());
+        vars.insert("key2".into(), "value2".into());
+
+        let ctxt = create_interpolation_context(vars).unwrap();
+
+        assert_eq!(ctxt.0.get("key1").unwrap(), "value1");
+        assert_eq!(ctxt.0.get("key2").unwrap(), "value2");
+    }
+
+    #[test]
+    fn test_create_interpolation_context_with_references() {
+        let mut vars = BTreeMap::new();
+        vars.insert("base".into(), "hello".into());
+        vars.insert("derived".into(), "${base} world".into());
+
+        let ctxt = create_interpolation_context(vars).unwrap();
+
+        assert_eq!(ctxt.0.get("base").unwrap(), "hello");
+        assert_eq!(ctxt.0.get("derived").unwrap(), "hello world");
+    }
+
+    #[test]
+    fn test_create_interpolation_context_multiple_levels() {
+        let mut vars = BTreeMap::new();
+        vars.insert("a".into(), "foo".into());
+        vars.insert("b".into(), "${a}bar".into());
+        vars.insert("c".into(), "${b}baz".into());
+
+        let ctxt = create_interpolation_context(vars).unwrap();
+
+        assert_eq!(ctxt.0.get("a").unwrap(), "foo");
+        assert_eq!(ctxt.0.get("b").unwrap(), "foobar");
+        assert_eq!(ctxt.0.get("c").unwrap(), "foobarbaz");
+    }
+
+    #[test]
+    fn test_create_interpolation_context_circular_reference() {
+        let mut vars = BTreeMap::new();
+        vars.insert("a".into(), "${b}".into());
+        vars.insert("b".into(), "${a}".into());
+
+        let result = create_interpolation_context(vars);
+
+        assert!(result.is_err());
+        match result {
+            Err(InterpError::CircularReference(_)) => (),
+            _ => panic!("Expected CircularReference error"),
+        }
+    }
+
+    #[test]
+    fn test_create_interpolation_context_self_reference() {
+        let mut vars = BTreeMap::new();
+        vars.insert("a".into(), "${a}".into());
+
+        let result = create_interpolation_context(vars);
+
+        assert!(result.is_err());
+        match result {
+            Err(InterpError::CircularReference(key)) => {
+                assert_eq!(key, "a");
+            }
+            _ => panic!("Expected CircularReference error"),
+        }
+    }
+
+    #[test]
+    fn test_create_interpolation_context_undefined_variable() {
+        let mut vars = BTreeMap::new();
+        vars.insert("a".into(), "${undefined}".into());
+
+        let result = create_interpolation_context(vars);
+
+        assert!(result.is_err());
+        match result {
+            Err(InterpError::ValueNotFound(key)) => {
+                assert_eq!(key, "undefined");
+            }
+            _ => panic!("Expected ValueNotFound error"),
+        }
+    }
+
+    #[test]
+    fn test_create_interpolation_context_complex_interpolation() {
+        let mut vars = BTreeMap::new();
+        vars.insert("host".into(), "example.com".into());
+        vars.insert("port".into(), "8080".into());
+        vars.insert("base_url".into(), "https://${host}:${port}".into());
+        vars.insert("api_url".into(), "${base_url}/api".into());
+
+        let ctxt = create_interpolation_context(vars).unwrap();
+
+        assert_eq!(ctxt.0.get("host").unwrap(), "example.com");
+        assert_eq!(ctxt.0.get("port").unwrap(), "8080");
+        assert_eq!(ctxt.0.get("base_url").unwrap(), "https://example.com:8080");
+        assert_eq!(ctxt.0.get("api_url").unwrap(), "https://example.com:8080/api");
+    }
 }
