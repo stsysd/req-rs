@@ -545,7 +545,27 @@ impl ReqTask {
             }
         }
 
+        // Add authentication
+        // For basic auth, use -u option instead of Authorization header
+        let skip_auth_header = if let Some(ref auth) = self.auth {
+            match auth {
+                ReqAuth::Basic { username, password } => {
+                    let escaped_user = username.replace("\\", "\\\\").replace("'", "\\'");
+                    let escaped_pass = password.replace("\\", "\\\\").replace("'", "\\'");
+                    lines.push(format!(" \\\n\t-u '{}:{}'", escaped_user, escaped_pass));
+                    true
+                }
+                ReqAuth::Bearer(_) => false,
+            }
+        } else {
+            false
+        };
+
         for (k, v) in request.headers().iter() {
+            // Skip Authorization header if we're using -u option for basic auth
+            if skip_auth_header && k.as_str().eq_ignore_ascii_case("authorization") {
+                continue;
+            }
             let kv = format!("{}:{}", k, v.to_str().expect("invalid header string"))
                 .replace("\\", "\\\\")
                 .replace("'", "\\'");
