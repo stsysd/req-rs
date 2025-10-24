@@ -176,7 +176,7 @@ impl Opt {
         }
 
         if self.curl {
-            println!("{}", task.to_curl()?);
+            writeln!(w, "{}", task.to_curl()?)?;
             return Ok(ExitCode::SUCCESS);
         }
 
@@ -844,5 +844,100 @@ mod tests {
 
         mock.assert();
         assert_eq!(code, ExitCode::SUCCESS);
+    }
+
+    mod curl_option_tests {
+        use super::*;
+        use std::io::Cursor;
+
+        #[rstest]
+        #[case::basic_get(
+            r#"
+                [tasks.test]
+                GET = "https://example.com/api/users"
+            "#,
+            vec!["req", "-f", "-", "--curl", "test"],
+            "basic_get"
+        )]
+        #[case::post_with_json_body(
+            r#"
+                [tasks.test]
+                POST = "https://example.com/api/users"
+
+                [tasks.test.body.json]
+                name = "John Doe"
+                email = "john@example.com"
+            "#,
+            vec!["req", "-f", "-", "--curl", "test"],
+            "post_with_json_body"
+        )]
+        #[case::with_custom_headers(
+            r#"
+                [tasks.test]
+                GET = "https://example.com/api/users"
+
+                [tasks.test.headers]
+                Authorization = "Bearer token123"
+                X-Custom-Header = "custom-value"
+            "#,
+            vec!["req", "-f", "-", "--curl", "test"],
+            "with_custom_headers"
+        )]
+        #[case::with_insecure_option(
+            r#"
+                [tasks.test]
+                GET = "https://self-signed.example.com/api"
+
+                [tasks.test.config]
+                insecure = true
+            "#,
+            vec!["req", "-f", "-", "--curl", "test"],
+            "with_insecure_option"
+        )]
+        #[case::with_redirect_option(
+            r#"
+                [tasks.test]
+                GET = "https://example.com/redirect"
+
+                [tasks.test.config]
+                redirect = 5
+            "#,
+            vec!["req", "-f", "-", "--curl", "test"],
+            "with_redirect_option"
+        )]
+        #[case::post_with_multiline_body(
+            r#"
+                [tasks.test]
+                POST = "https://example.com/api/data"
+
+                [tasks.test.body.json]
+                description = "Line 1\nLine 2\nLine 3"
+                title = "Test"
+            "#,
+            vec!["req", "-f", "-", "--curl", "test"],
+            "post_with_multiline_body"
+        )]
+        #[case::with_special_chars_in_url(
+            r#"
+                [tasks.test]
+                GET = "https://example.com/api/search?q=test&lang=en"
+            "#,
+            vec!["req", "-f", "-", "--curl", "test"],
+            "with_special_chars_in_url"
+        )]
+        fn test_curl_output(
+            #[case] input: &str,
+            #[case] args: Vec<&str>,
+            #[case] snapshot_name: &str,
+        ) {
+            let opt = Opt::try_parse_from(args).unwrap();
+            let mut output = Cursor::new(Vec::new());
+
+            let code = opt.exec(&mut input.as_bytes(), &mut output).unwrap();
+
+            assert_eq!(code, ExitCode::SUCCESS);
+            let output_str = String::from_utf8(output.into_inner()).unwrap();
+            insta::assert_snapshot!(snapshot_name, output_str);
+        }
     }
 }

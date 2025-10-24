@@ -1,0 +1,5 @@
+---
+source: src/main.rs
+expression: output_str
+---
+curl -L -X GET 'https://example.com/redirect'
