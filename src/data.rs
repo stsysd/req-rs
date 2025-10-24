@@ -519,7 +519,9 @@ impl ReqTask {
                 ReqProxy::Simple(proxy_url) => {
                     lines.push(format!(" \\\n\t-x '{}'", proxy_url.url()));
                     if let Some((username, password)) = proxy_url.credentials() {
-                        lines.push(format!(" \\\n\t--proxy-user '{}:{}'", username, password));
+                        let escaped_user = username.replace("\\", "\\\\").replace("'", "\\'");
+                        let escaped_pass = password.replace("\\", "\\\\").replace("'", "\\'");
+                        lines.push(format!(" \\\n\t--proxy-user '{}:{}'", escaped_user, escaped_pass));
                     }
                 }
                 ReqProxy::Detailed { http, https } => {
@@ -534,7 +536,9 @@ impl ReqTask {
                     if let Some(proxy_url) = proxy_url {
                         lines.push(format!(" \\\n\t-x '{}'", proxy_url.url()));
                         if let Some((username, password)) = proxy_url.credentials() {
-                            lines.push(format!(" \\\n\t--proxy-user '{}:{}'", username, password));
+                            let escaped_user = username.replace("\\", "\\\\").replace("'", "\\'");
+                            let escaped_pass = password.replace("\\", "\\\\").replace("'", "\\'");
+                            lines.push(format!(" \\\n\t--proxy-user '{}:{}'", escaped_user, escaped_pass));
                         }
                     }
                 }

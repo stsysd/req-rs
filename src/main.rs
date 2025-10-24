@@ -984,6 +984,31 @@ mod tests {
             vec!["req", "-f", "-", "--curl", "test"],
             "with_detailed_proxy"
         )]
+        #[case::with_detailed_proxy_http_url(
+            r#"
+                [tasks.test]
+                GET = "http://example.com/api/data"
+
+                [tasks.test.config.proxy]
+                http = "http://http-proxy.example.com:8080"
+                https = "http://https-proxy.example.com:8443"
+            "#,
+            vec!["req", "-f", "-", "--curl", "test"],
+            "with_detailed_proxy_http_url"
+        )]
+        #[case::with_proxy_special_chars(
+            r#"
+                [tasks.test]
+                GET = "https://example.com/api/data"
+
+                [tasks.test.config.proxy]
+                url = "http://proxy.example.com:8080"
+                username = "user's\\name"
+                password = "pass'word"
+            "#,
+            vec!["req", "-f", "-", "--curl", "test"],
+            "with_proxy_special_chars"
+        )]
         fn test_curl_output(
             #[case] input: &str,
             #[case] args: Vec<&str>,

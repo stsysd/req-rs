@@ -1,0 +1,6 @@
+---
+source: src/main.rs
+expression: output_str
+---
+curl -X GET 'http://example.com/api/data' \
+	-x 'http://http-proxy.example.com:8080'
