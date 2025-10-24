@@ -2,4 +2,4 @@
 source: src/main.rs
 expression: output_str
 ---
-
+curl -k -X GET 'https://self-signed.example.com/api'

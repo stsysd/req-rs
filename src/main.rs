@@ -176,7 +176,7 @@ impl Opt {
         }
 
         if self.curl {
-            println!("{}", task.to_curl()?);
+            writeln!(w, "{}", task.to_curl()?)?;
             return Ok(ExitCode::SUCCESS);
         }
 
@@ -864,7 +864,7 @@ mod tests {
                 [tasks.test]
                 POST = "https://example.com/api/users"
 
-                [tasks.test.data]
+                [tasks.test.body.json]
                 name = "John Doe"
                 email = "john@example.com"
             "#,
@@ -910,7 +910,7 @@ mod tests {
                 [tasks.test]
                 POST = "https://example.com/api/data"
 
-                [tasks.test.data]
+                [tasks.test.body.json]
                 description = "Line 1\nLine 2\nLine 3"
                 title = "Test"
             "#,

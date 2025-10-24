@@ -2,4 +2,8 @@
 source: src/main.rs
 expression: output_str
 ---
-
+curl -X POST 'https://example.com/api/data' \
+	-H 'content-type:application/json' \
+	-d @- << REQUEST_BODY
+{"description":"Line 1\nLine 2\nLine 3","title":"Test"}
+REQUEST_BODY

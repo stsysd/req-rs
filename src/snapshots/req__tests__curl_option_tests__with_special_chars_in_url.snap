@@ -2,4 +2,4 @@
 source: src/main.rs
 expression: output_str
 ---
-
+curl -X GET 'https://example.com/api/search?q=test&lang=en'

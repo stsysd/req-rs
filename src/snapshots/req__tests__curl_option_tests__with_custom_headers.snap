@@ -2,4 +2,6 @@
 source: src/main.rs
 expression: output_str
 ---
-
+curl -X GET 'https://example.com/api/users' \
+	-H 'authorization:Bearer token123' \
+	-H 'x-custom-header:custom-value'
