@@ -33,3 +33,4 @@ httpmock = "0.8.2"
 rstest = "0.26.1"
 tempfile = "3.23.0"
 uuid = { version = "1.16.0", features = ["v4"] }
+insta = "1.41"
