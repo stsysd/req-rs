@@ -1,0 +1,6 @@
+---
+source: src/main.rs
+expression: output_str
+---
+curl -X GET 'https://example.com/api/protected' \
+	-H 'authorization:Basic YWRtaW46c2VjcmV0MTIz'

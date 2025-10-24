@@ -512,6 +512,35 @@ impl ReqTask {
                 .replace("\'", "\\'"),
             request.url().as_str(),
         ));
+
+        // Add proxy settings
+        if let Some(ref proxy) = config.proxy {
+            match proxy {
+                ReqProxy::Simple(proxy_url) => {
+                    lines.push(format!(" \\\n\t-x '{}'", proxy_url.url()));
+                    if let Some((username, password)) = proxy_url.credentials() {
+                        lines.push(format!(" \\\n\t--proxy-user '{}:{}'", username, password));
+                    }
+                }
+                ReqProxy::Detailed { http, https } => {
+                    // For detailed proxy, prefer HTTPS proxy if the request URL is HTTPS
+                    let url_str = request.url().as_str();
+                    let proxy_url = if url_str.starts_with("https://") {
+                        https.as_ref().or(http.as_ref())
+                    } else {
+                        http.as_ref().or(https.as_ref())
+                    };
+
+                    if let Some(proxy_url) = proxy_url {
+                        lines.push(format!(" \\\n\t-x '{}'", proxy_url.url()));
+                        if let Some((username, password)) = proxy_url.credentials() {
+                            lines.push(format!(" \\\n\t--proxy-user '{}:{}'", username, password));
+                        }
+                    }
+                }
+            }
+        }
+
         for (k, v) in request.headers().iter() {
             let kv = format!("{}:{}", k, v.to_str().expect("invalid header string"))
                 .replace("\\", "\\\\")

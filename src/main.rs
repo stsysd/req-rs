@@ -925,6 +925,65 @@ mod tests {
             vec!["req", "-f", "-", "--curl", "test"],
             "with_special_chars_in_url"
         )]
+        #[case::with_bearer_auth(
+            r#"
+                [tasks.test]
+                GET = "https://example.com/api/protected"
+
+                [tasks.test.auth]
+                bearer = "my-secret-token-123"
+            "#,
+            vec!["req", "-f", "-", "--curl", "test"],
+            "with_bearer_auth"
+        )]
+        #[case::with_basic_auth(
+            r#"
+                [tasks.test]
+                GET = "https://example.com/api/protected"
+
+                [tasks.test.auth.basic]
+                username = "admin"
+                password = "secret123"
+            "#,
+            vec!["req", "-f", "-", "--curl", "test"],
+            "with_basic_auth"
+        )]
+        #[case::with_simple_proxy(
+            r#"
+                [tasks.test]
+                GET = "https://example.com/api/data"
+
+                [tasks.test.config]
+                proxy = "http://proxy.example.com:8080"
+            "#,
+            vec!["req", "-f", "-", "--curl", "test"],
+            "with_simple_proxy"
+        )]
+        #[case::with_proxy_auth(
+            r#"
+                [tasks.test]
+                GET = "https://example.com/api/data"
+
+                [tasks.test.config.proxy]
+                url = "http://proxy.example.com:8080"
+                username = "proxy-user"
+                password = "proxy-pass"
+            "#,
+            vec!["req", "-f", "-", "--curl", "test"],
+            "with_proxy_auth"
+        )]
+        #[case::with_detailed_proxy(
+            r#"
+                [tasks.test]
+                GET = "https://example.com/api/data"
+
+                [tasks.test.config.proxy]
+                http = "http://http-proxy.example.com:8080"
+                https = "http://https-proxy.example.com:8443"
+            "#,
+            vec!["req", "-f", "-", "--curl", "test"],
+            "with_detailed_proxy"
+        )]
         fn test_curl_output(
             #[case] input: &str,
             #[case] args: Vec<&str>,
