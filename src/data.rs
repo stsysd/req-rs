@@ -412,6 +412,11 @@ impl ReqConfig {
     }
 }
 
+/// Escape special characters in a string for safe use in shell single quotes
+fn escape_shell_string(s: &str) -> String {
+    s.replace("\\", "\\\\").replace("'", "\\'")
+}
+
 impl ReqTask {
     fn interpolate(&self, ctxt: &InterpContext) -> InterpResult<ReqTask> {
         let ReqTask {
@@ -519,9 +524,11 @@ impl ReqTask {
                 ReqProxy::Simple(proxy_url) => {
                     lines.push(format!(" \\\n\t-x '{}'", proxy_url.url()));
                     if let Some((username, password)) = proxy_url.credentials() {
-                        let escaped_user = username.replace("\\", "\\\\").replace("'", "\\'");
-                        let escaped_pass = password.replace("\\", "\\\\").replace("'", "\\'");
-                        lines.push(format!(" \\\n\t--proxy-user '{}:{}'", escaped_user, escaped_pass));
+                        lines.push(format!(
+                            " \\\n\t--proxy-user '{}:{}'",
+                            escape_shell_string(username),
+                            escape_shell_string(password)
+                        ));
                     }
                 }
                 ReqProxy::Detailed { http, https } => {
@@ -536,9 +543,11 @@ impl ReqTask {
                     if let Some(proxy_url) = proxy_url {
                         lines.push(format!(" \\\n\t-x '{}'", proxy_url.url()));
                         if let Some((username, password)) = proxy_url.credentials() {
-                            let escaped_user = username.replace("\\", "\\\\").replace("'", "\\'");
-                            let escaped_pass = password.replace("\\", "\\\\").replace("'", "\\'");
-                            lines.push(format!(" \\\n\t--proxy-user '{}:{}'", escaped_user, escaped_pass));
+                            lines.push(format!(
+                                " \\\n\t--proxy-user '{}:{}'",
+                                escape_shell_string(username),
+                                escape_shell_string(password)
+                            ));
                         }
                     }
                 }
@@ -550,9 +559,11 @@ impl ReqTask {
         let skip_auth_header = if let Some(ref auth) = self.auth {
             match auth {
                 ReqAuth::Basic { username, password } => {
-                    let escaped_user = username.replace("\\", "\\\\").replace("'", "\\'");
-                    let escaped_pass = password.replace("\\", "\\\\").replace("'", "\\'");
-                    lines.push(format!(" \\\n\t-u '{}:{}'", escaped_user, escaped_pass));
+                    lines.push(format!(
+                        " \\\n\t-u '{}:{}'",
+                        escape_shell_string(username),
+                        escape_shell_string(password)
+                    ));
                     true
                 }
                 ReqAuth::Bearer(_) => false,
@@ -566,7 +577,7 @@ impl ReqTask {
             if skip_auth_header && k.as_str().eq_ignore_ascii_case("authorization") {
                 continue;
             }
-            let kv = format!("{}:{}", k, v.to_str().expect("invalid header string"))
+            let kv = format!("{}: {}", k, v.to_str().expect("invalid header string"))
                 .replace("\\", "\\\\")
                 .replace("'", "\\'");
             lines.push(format!(" \\\n\t-H '{}'", kv));
