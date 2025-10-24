@@ -3,7 +3,7 @@ source: src/main.rs
 expression: output_str
 ---
 curl -X POST 'https://example.com/api/users' \
-	-H 'content-type:application/json' \
+	-H 'content-type: application/json' \
 	-d @- << REQUEST_BODY
 {"email":"john@example.com","name":"John Doe"}
 REQUEST_BODY

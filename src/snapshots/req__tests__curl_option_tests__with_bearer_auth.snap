@@ -1,0 +1,6 @@
+---
+source: src/main.rs
+expression: output_str
+---
+curl -X GET 'https://example.com/api/protected' \
+	-H 'authorization: Bearer my-secret-token-123'
