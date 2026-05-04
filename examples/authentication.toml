@@ -1,0 +1,23 @@
+#:schema ../req.schema.json
+
+# Authentication examples
+
+[variables]
+TOKEN = "your-api-token-here"
+USERNAME = "admin"
+PASSWORD = "secret"
+
+[tasks.bearer-auth]
+GET = 'https://api.example.com/protected'
+description = "Bearer token authentication"
+
+[tasks.bearer-auth.auth]
+bearer = "${TOKEN}"
+
+[tasks.basic-auth]
+GET = 'https://api.example.com/admin'
+description = "Basic authentication"
+
+[tasks.basic-auth.auth.basic]
+username = "${USERNAME}"
+password = "${PASSWORD}"

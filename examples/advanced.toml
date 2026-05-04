@@ -1,0 +1,33 @@
+#:schema ../req.schema.json
+
+# Advanced configuration example
+
+[config]
+insecure = false
+redirect = 5
+env-file = true
+
+[variables]
+DOMAIN = "example.com"
+API_VERSION = "v1"
+
+[tasks.with-redirects]
+GET = "https://short.url/abc123"
+description = "Follow redirects"
+
+[tasks.dev-api]
+GET = 'https://dev.local/api'
+description = "Development API with self-signed cert"
+
+[tasks.dev-api.config]
+insecure = true
+redirect = 0
+
+[tasks.interpolation-example]
+GET = "https://${DOMAIN}/api/${API_VERSION}/users"
+description = "URL with variable interpolation"
+
+[tasks.interpolation-example.headers]
+Authorization = "Bearer ${TOKEN}"
+X-API-Version = "${API_VERSION}"
+

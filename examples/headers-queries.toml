@@ -1,0 +1,24 @@
+#:schema ../req.schema.json
+
+# Headers and query parameters example
+
+[tasks.search]
+GET = 'https://api.example.com/search'
+description = "Search with query parameters"
+
+[tasks.search.queries]
+q = "rust programming"
+limit = "10"
+sort = "relevance"
+
+[tasks.search.headers]
+Accept = "application/json"
+User-Agent = "req/1.0"
+
+[tasks.multiple-headers]
+GET = 'https://httpbin.org/get'
+description = "Multiple values for same header"
+
+[tasks.multiple-headers.headers]
+Accept = ["application/json", "text/html"]
+X-Custom = ["value1", "value2"]

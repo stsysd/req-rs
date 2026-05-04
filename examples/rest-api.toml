@@ -1,0 +1,31 @@
+#:schema ../req.schema.json
+
+# REST API testing example
+
+[tasks.list-users]
+GET = 'https://api.example.com/users'
+description = "Get all users"
+
+[tasks.get-user]
+GET = 'https://api.example.com/users/123'
+description = "Get specific user"
+
+[tasks.create-user]
+POST = 'https://api.example.com/users'
+description = "Create new user"
+
+[tasks.create-user.body.json]
+name = "John Doe"
+email = "john@example.com"
+
+[tasks.update-user]
+PUT = 'https://api.example.com/users/123'
+description = "Update user"
+
+[tasks.update-user.body.json]
+name = "Jane Doe"
+email = "jane@example.com"
+
+[tasks.delete-user]
+DELETE = 'https://api.example.com/users/123'
+description = "Delete user"

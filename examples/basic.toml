@@ -1,0 +1,11 @@
+#:schema ../req.schema.json
+
+# Basic HTTP requests example
+
+[tasks.hello]
+GET = 'https://httpbin.org/get'
+description = "My first request"
+
+[tasks.post-example]
+POST = 'https://httpbin.org/post'
+description = "POST request"

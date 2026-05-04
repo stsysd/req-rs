@@ -1,0 +1,17 @@
+#:schema ../req.schema.json
+
+# Environment management example
+# Use with: req api-call -e .env.dev
+
+[tasks.api-call]
+GET = "${BASE_URL}/endpoint"
+description = "API call with environment variables"
+
+[tasks.api-call.auth]
+bearer = "${API_TOKEN}"
+
+[tasks.api-call.headers]
+Accept = "application/json"
+
+[tasks.api-call.queries]
+limit = "10"

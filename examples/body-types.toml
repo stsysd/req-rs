@@ -1,0 +1,36 @@
+#:schema ../req.schema.json
+
+# Different request body types
+
+[tasks.plain-text]
+POST = 'https://httpbin.org/post'
+description = "Plain text body"
+
+[tasks.plain-text.body]
+plain = "Hello, World!"
+
+[tasks.json-body]
+POST = 'https://httpbin.org/post'
+description = "JSON body"
+
+[tasks.json-body.body.json]
+name = "Alice"
+age = 30
+active = true
+tags = ["developer", "rust"]
+
+[tasks.form-data]
+POST = 'https://httpbin.org/post'
+description = "Form-encoded body"
+
+[tasks.form-data.body.form]
+username = "alice"
+password = "secret"
+
+[tasks.multipart]
+POST = 'https://httpbin.org/post'
+description = "Multipart form data with file upload"
+
+[tasks.multipart.body.multipart]
+document.file = "/path/to/document.pdf"
+description = "My document"
