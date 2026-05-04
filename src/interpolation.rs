@@ -89,20 +89,17 @@ fn getter_with_cache<'i>(
     cache: &mut HashMap<String, Delay<String>>,
 ) -> InterpResult<Cow<'i, str>> {
     match cache.get(key) {
-        Some(Delay::Pending) => Err(InterpError::CircularReference(key.to_string())),
-        Some(Delay::Done(s)) => Ok(Cow::from(s.clone())),
-        None => {
-            if map.contains_key(key) {
-                cache.insert(key.to_string(), Delay::Pending);
-                let s =
-                    interpolate_with_func(&map[key], &mut |k| getter_with_cache(k, map, cache))?;
-                cache.insert(key.to_string(), Delay::Done(s.to_string()));
-                Ok(s)
-            } else {
-                Err(InterpError::ValueNotFound(key.to_string()))
-            }
-        }
+        Some(Delay::Pending) => return Err(InterpError::CircularReference(key.to_string())),
+        Some(Delay::Done(s)) => return Ok(Cow::Owned(s.clone())),
+        None => {}
     }
+    let Some(raw) = map.get(key) else {
+        return Err(InterpError::ValueNotFound(key.to_string()));
+    };
+    cache.insert(key.to_string(), Delay::Pending);
+    let s = interpolate_with_func(raw, &mut |k| getter_with_cache(k, map, cache))?;
+    cache.insert(key.to_string(), Delay::Done(s.to_string()));
+    Ok(s)
 }
 
 #[cfg(test)]
