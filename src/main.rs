@@ -141,7 +141,7 @@ impl Opt {
             .context(format!("malformed file: {}", self.input))?;
 
         let Some(name) = self.name.as_deref() else {
-            print!("{}", req.display_tasks());
+            write!(w, "{}", req.display_tasks())?;
             return Ok(ExitCode::SUCCESS);
         };
 
