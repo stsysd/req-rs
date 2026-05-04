@@ -53,3 +53,28 @@ attachment = {{ file = "payload.txt" }}
     req_command(&dir).arg("upload").assert().success();
     mock.assert();
 }
+
+#[test]
+fn multipart_missing_file_fails() {
+    let server = MockServer::start();
+    let mock = server.mock(|when, then| {
+        when.method(POST).path("/upload");
+        then.status(200).body("ok");
+    });
+
+    let dir = TestDir::new();
+    // payload.txt intentionally NOT created
+    dir.write_config(&format!(
+        r#"
+[tasks.upload]
+POST = "{}/upload"
+
+[tasks.upload.body.multipart]
+attachment = {{ file = "payload.txt" }}
+"#,
+        server.base_url()
+    ));
+
+    req_command(&dir).arg("upload").assert().failure();
+    mock.assert_hits(0);
+}

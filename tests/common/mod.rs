@@ -26,8 +26,18 @@ impl TestDir {
     }
 
     pub fn write_file(&self, name: &str, contents: &str) {
+        debug_assert!(
+            !name.contains('/') && !name.contains('\\'),
+            "name must be a bare filename, got {name:?}"
+        );
         fs::write(self.path().join(name), contents)
             .expect("failed to write file");
+    }
+}
+
+impl Default for TestDir {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -39,6 +49,9 @@ impl TestDir {
 ///   `.env`-derived vars, etc. cannot leak into the test.
 /// - `PATH` is restored from the parent because some platforms need it
 ///   for runtime linker / TLS init paths.
+/// - `HOME` is intentionally NOT restored: `reqwest` uses `rustls` with
+///   bundled CA roots (no `~/.local/share/ca-certificates` lookup), and
+///   `dotenvy` reads explicit relative paths (no `HOME` lookup).
 pub fn req_command(dir: &TestDir) -> Command {
     let mut cmd = Command::cargo_bin("req").expect("req binary not built");
     cmd.current_dir(dir.path()).env_clear();
