@@ -75,6 +75,6 @@ attachment = {{ file = "payload.txt" }}
         server.base_url()
     ));
 
-    req_command(&dir).arg("upload").assert().failure();
+    req_command(&dir).arg("upload").assert().code(4);
     mock.assert_calls(0);
 }

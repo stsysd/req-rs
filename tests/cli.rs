@@ -25,7 +25,7 @@ GET = "{}/hello"
 }
 
 #[test]
-fn http_500_exits_with_code_1() {
+fn http_500_exits_with_http_error_code() {
     let server = MockServer::start();
     let mock = server.mock(|when, then| {
         when.method(GET).path("/boom");
@@ -41,6 +41,6 @@ GET = "{}/boom"
         server.base_url()
     ));
 
-    req_command(&dir).arg("boom").assert().code(1);
+    req_command(&dir).arg("boom").assert().code(6);
     mock.assert();
 }
