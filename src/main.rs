@@ -140,12 +140,10 @@ impl Opt {
         let req = toml::from_str::<Req>(input.as_str())
             .context(format!("malformed file: {}", self.input))?;
 
-        if self.name.is_none() {
+        let Some(name) = self.name.as_deref() else {
             print!("{}", req.display_tasks());
             return Ok(ExitCode::SUCCESS);
-        }
-
-        let name = self.name.as_ref().unwrap();
+        };
 
         // Load env file: --env-file takes precedence over config.env-file
         let mut env_vars = vec![];
