@@ -606,22 +606,16 @@ impl Req {
         self.config.as_ref().and_then(|c| c.env_file.path())
     }
 
-    pub fn get_task(self, name: &str) -> InterpResult<Option<ReqTask>> {
-        let Req {
-            tasks,
-            variables,
-            config,
-        } = self;
-        let ctxt = create_interpolation_context(variables)?;
-        if let Some(task) = tasks.get(name) {
-            let mut task = task.interpolate(&ctxt)?;
-            if task.config.is_none() {
-                task.config = config.clone();
-            }
-            Ok(Some(task))
-        } else {
-            Ok(None)
+    pub fn get_task(&self, name: &str) -> InterpResult<Option<ReqTask>> {
+        let ctxt = create_interpolation_context(self.variables.clone())?;
+        let Some(task) = self.tasks.get(name) else {
+            return Ok(None);
+        };
+        let mut task = task.interpolate(&ctxt)?;
+        if task.config.is_none() {
+            task.config = self.config.clone();
         }
+        Ok(Some(task))
     }
 
     pub fn with_values<I>(self, vals: I) -> Self
