@@ -66,8 +66,6 @@ where
     ))
 }
 
-// `dead_code` allow is removed in Task 4 when ReqError is consumed by `main()`.
-#[allow(dead_code)]
 #[derive(Debug)]
 pub(crate) enum ReqError {
     Usage(anyhow::Error),
@@ -77,7 +75,6 @@ pub(crate) enum ReqError {
     Http(anyhow::Error),
 }
 
-#[allow(dead_code)]
 impl ReqError {
     pub(crate) fn exit_code(&self) -> ExitCode {
         match self {
@@ -104,8 +101,6 @@ impl std::fmt::Display for ReqError {
 
 impl Error for ReqError {}
 
-// `dead_code` allow is removed in Task 4 when classify_build_error is used by `Opt::exec`.
-#[allow(dead_code)]
 fn classify_build_error(err: anyhow::Error) -> ReqError {
     if err.chain().any(|src| src.is::<std::io::Error>()) {
         ReqError::Io(err)
@@ -172,24 +167,30 @@ struct Opt {
 }
 
 impl Opt {
-    pub(crate) fn exec<R, W>(&self, r: &mut R, w: &mut W) -> anyhow::Result<ExitCode>
+    pub(crate) fn exec<R, W>(&self, r: &mut R, w: &mut W) -> Result<ExitCode, ReqError>
     where
         R: Read,
         W: Write,
     {
         let input = if self.input == "-" {
             let mut buf = String::new();
-            r.read_to_string(&mut buf)?;
+            r.read_to_string(&mut buf)
+                .context("fail to read stdin")
+                .map_err(ReqError::Io)?;
             buf
         } else {
             fs::read_to_string(self.input.as_str())
-                .context(format!("fail to open file: {}", self.input))?
+                .with_context(|| format!("fail to open file: {}", self.input))
+                .map_err(ReqError::Io)?
         };
         let req = toml::from_str::<Req>(input.as_str())
-            .context(format!("malformed file: {}", self.input))?;
+            .with_context(|| format!("malformed file: {}", self.input))
+            .map_err(ReqError::Config)?;
 
         let Some(name) = self.name.as_deref() else {
-            write!(w, "{}", req.display_tasks())?;
+            write!(w, "{}", req.display_tasks())
+                .context("fail to write task listing")
+                .map_err(ReqError::Io)?;
             return Ok(ExitCode::SUCCESS);
         };
 
@@ -199,7 +200,8 @@ impl Opt {
 
         if let Some(path) = env_file_path {
             let vars = load_env_file(path)
-                .context(format!("fail to load env file: {path}"))?;
+                .with_context(|| format!("fail to load env file: {path}"))
+                .map_err(ReqError::Config)?;
             env_vars.extend(vars);
         }
 
@@ -207,42 +209,57 @@ impl Opt {
         env_vars.extend(self.variables.clone());
 
         let req = req.with_values(env_vars);
-        let task = if let Some(task) = req.get_task(name).context("fail to resolve context")? {
-            Ok(task)
-        } else {
-            Err(anyhow!("task `{name}` is not defined"))
-        }?;
+        let task = req
+            .get_task(name)
+            .context("fail to resolve context")
+            .map_err(ReqError::Config)?
+            .ok_or_else(|| ReqError::Config(anyhow!("task `{name}` is not defined")))?;
 
         if self.dryrun {
             println!("{task:#?}");
             return Ok(ExitCode::SUCCESS);
         }
 
+        let (client, request) = task.build_request().map_err(classify_build_error)?;
+
         if self.curl {
-            let (_, request) = task.build_request()?;
-            writeln!(w, "{}", task.to_curl(&request)?)?;
+            let curl = task.to_curl(&request).map_err(ReqError::Usage)?;
+            writeln!(w, "{curl}")
+                .context("fail to write curl output")
+                .map_err(ReqError::Io)?;
             return Ok(ExitCode::SUCCESS);
         }
 
-        let (client, request) = task.build_request()?;
-        let mut res = client.execute(request).context("fail to send request")?;
+        let mut res = client
+            .execute(request)
+            .context("fail to send request")
+            .map_err(ReqError::Network)?;
         let mut buf = vec![];
-        download(&mut res, &mut buf)?;
+        download(&mut res, &mut buf).map_err(ReqError::Network)?;
         if self.include_header {
-            print_header(&res, w)?;
+            print_header(&res, w).map_err(ReqError::Io)?;
         }
 
         if let Some(ref path) = self.output {
-            std::fs::File::create(path)?.write_all(&buf)?;
+            std::fs::File::create(path)
+                .and_then(|mut f| f.write_all(&buf))
+                .with_context(|| format!("fail to write output file: {path}"))
+                .map_err(ReqError::Io)?;
         } else {
-            w.write_all(&buf)?;
+            w.write_all(&buf)
+                .context("fail to write response body")
+                .map_err(ReqError::Io)?;
         }
 
         let s = res.status();
         if s.is_success() {
             Ok(ExitCode::SUCCESS)
         } else {
-            Ok(ExitCode::FAILURE)
+            Err(ReqError::Http(anyhow!(
+                "HTTP error: {} {}",
+                s.as_u16(),
+                s.canonical_reason().unwrap_or("")
+            )))
         }
     }
 }
@@ -256,8 +273,14 @@ fn load_env_file(path: &str) -> anyhow::Result<Vec<(String, String)>> {
     Ok(vars)
 }
 
-fn main() -> anyhow::Result<ExitCode> {
-    Opt::parse().exec(&mut stdin(), &mut stdout())
+fn main() -> ExitCode {
+    match Opt::parse().exec(&mut stdin(), &mut stdout()) {
+        Ok(code) => code,
+        Err(e) => {
+            eprintln!("Error: {e}");
+            e.exit_code()
+        }
+    }
 }
 
 fn download<W: Write>(res: &mut reqwest::blocking::Response, w: &mut W) -> anyhow::Result<()> {
