@@ -171,27 +171,25 @@ impl ReqProxy {
     }
 
     fn apply_to_client(&self, mut builder: ClientBuilder) -> anyhow::Result<ClientBuilder> {
+        fn with_auth(mut proxy: reqwest::Proxy, src: &ReqProxyUrl) -> reqwest::Proxy {
+            if let Some((username, password)) = src.credentials() {
+                proxy = proxy.basic_auth(username, password);
+            }
+            proxy
+        }
+
         match self {
             ReqProxy::Simple(proxy_url) => {
-                let mut proxy = reqwest::Proxy::all(proxy_url.url())?;
-                if let Some((username, password)) = proxy_url.credentials() {
-                    proxy = proxy.basic_auth(username, password);
-                }
+                let proxy = with_auth(reqwest::Proxy::all(proxy_url.url())?, proxy_url);
                 builder = builder.proxy(proxy);
             }
             ReqProxy::Detailed { http, https } => {
                 if let Some(proxy_url) = http {
-                    let mut proxy = reqwest::Proxy::http(proxy_url.url())?;
-                    if let Some((username, password)) = proxy_url.credentials() {
-                        proxy = proxy.basic_auth(username, password);
-                    }
+                    let proxy = with_auth(reqwest::Proxy::http(proxy_url.url())?, proxy_url);
                     builder = builder.proxy(proxy);
                 }
                 if let Some(proxy_url) = https {
-                    let mut proxy = reqwest::Proxy::https(proxy_url.url())?;
-                    if let Some((username, password)) = proxy_url.credentials() {
-                        proxy = proxy.basic_auth(username, password);
-                    }
+                    let proxy = with_auth(reqwest::Proxy::https(proxy_url.url())?, proxy_url);
                     builder = builder.proxy(proxy);
                 }
             }
