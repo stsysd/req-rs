@@ -242,6 +242,8 @@ impl ReqAuth {
     }
 }
 
+/// A single, fully-resolved HTTP task: method + URL + headers/queries/body
+/// plus optional auth and per-task config.
 #[derive(Debug, Clone, Deserialize)]
 pub struct ReqTask {
     #[serde(flatten)]
@@ -266,6 +268,8 @@ pub struct ReqTask {
     config: Option<ReqConfig>,
 }
 
+/// Top-level deserialized representation of a `req.toml` file: the named
+/// task table, shared variables, and global config.
 #[derive(Debug, Deserialize, Clone)]
 pub struct Req {
     #[serde(rename = "tasks", alias = "req")]
@@ -490,11 +494,17 @@ impl ReqTask {
         Ok((client, builder.build()?))
     }
 
+    /// Build and execute the underlying HTTP request, returning the
+    /// blocking `Response`.
     pub fn send(&self) -> anyhow::Result<Response> {
         let (client, request) = self.request()?;
         Ok(client.execute(request)?)
     }
 
+    /// Render this task as a `curl` invocation suitable for copy-paste.
+    ///
+    /// Multipart bodies and bodies that are not valid UTF-8 are not
+    /// supported and return an error rather than panicking.
     pub fn to_curl(&self) -> anyhow::Result<String> {
         let (_, request) = self.request()?;
         let mut lines = vec![];
@@ -602,10 +612,18 @@ impl ReqTask {
 }
 
 impl Req {
+    /// Path to the env file declared via `[config] env-file = ...`, if any.
+    /// Returns `Some(".env")` for `env-file = true` and `None` for `false`
+    /// or unset.
     pub fn env_file(&self) -> Option<&str> {
         self.config.as_ref().and_then(|c| c.env_file.path())
     }
 
+    /// Look up `name` in the task table and return a fully-interpolated
+    /// `ReqTask`. Returns `Ok(None)` if no such task exists.
+    ///
+    /// The task inherits the file-level `[config]` if it does not provide
+    /// its own.
     pub fn get_task(&self, name: &str) -> InterpResult<Option<ReqTask>> {
         let ctxt = create_interpolation_context(self.variables.clone())?;
         let Some(task) = self.tasks.get(name) else {
@@ -618,6 +636,9 @@ impl Req {
         Ok(Some(task))
     }
 
+    /// Merge additional variables into this `Req`, overwriting any
+    /// existing entries with the same key. Used to apply `-v` overrides
+    /// and env-file values on top of the TOML-declared `[variables]`.
     pub fn with_values<I>(self, vals: I) -> Self
     where
         I: IntoIterator<Item = (String, String)>,
@@ -629,6 +650,8 @@ impl Req {
         Req { variables, ..self }
     }
 
+    /// Render the task list as `name\tdescription` lines (the output
+    /// shown when `req` is invoked without a task name).
     pub fn display_tasks(&self) -> String {
         let mut strings = vec![];
         for (k, v) in &self.tasks {
