@@ -66,6 +66,41 @@ where
     ))
 }
 
+#[derive(Debug)]
+pub(crate) enum ReqError {
+    Usage(anyhow::Error),
+    Config(anyhow::Error),
+    Io(anyhow::Error),
+    Network(anyhow::Error),
+    Http(anyhow::Error),
+}
+
+impl ReqError {
+    fn exit_code(&self) -> ExitCode {
+        match self {
+            Self::Usage(_) => ExitCode::from(2),
+            Self::Config(_) => ExitCode::from(3),
+            Self::Io(_) => ExitCode::from(4),
+            Self::Network(_) => ExitCode::from(5),
+            Self::Http(_) => ExitCode::from(6),
+        }
+    }
+}
+
+impl std::fmt::Display for ReqError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Self::Usage(e)
+            | Self::Config(e)
+            | Self::Io(e)
+            | Self::Network(e)
+            | Self::Http(e) => write!(f, "{e:#}"),
+        }
+    }
+}
+
+impl Error for ReqError {}
+
 #[derive(Debug, Parser)]
 #[command(name = "req", about, version)]
 struct Opt {
@@ -273,6 +308,17 @@ mod tests {
     #[fixture]
     fn server() -> MockServer {
         MockServer::start()
+    }
+
+
+    #[rstest]
+    #[case::usage(ReqError::Usage(anyhow!("u")), ExitCode::from(2))]
+    #[case::config(ReqError::Config(anyhow!("c")), ExitCode::from(3))]
+    #[case::io(ReqError::Io(anyhow!("i")), ExitCode::from(4))]
+    #[case::network(ReqError::Network(anyhow!("n")), ExitCode::from(5))]
+    #[case::http(ReqError::Http(anyhow!("h")), ExitCode::from(6))]
+    fn req_error_exit_code(#[case] err: ReqError, #[case] expected: ExitCode) {
+        assert_eq!(err.exit_code(), expected);
     }
 
     #[rstest]
