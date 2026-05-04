@@ -26,3 +26,29 @@ GET = "http://${HOST}/probe"
     req_command(&dir).arg("hit").assert().success();
     mock.assert();
 }
+
+#[test]
+fn multipart_file_resolved_from_cwd() {
+    let server = MockServer::start();
+    let mock = server.mock(|when, then| {
+        when.method(POST)
+            .path("/upload");
+        then.status(200).body("ok");
+    });
+
+    let dir = TestDir::new();
+    dir.write_file("payload.txt", "hello-from-disk");
+    dir.write_config(&format!(
+        r#"
+[tasks.upload]
+POST = "{}/upload"
+
+[tasks.upload.body.multipart]
+attachment = {{ file = "payload.txt" }}
+"#,
+        server.base_url()
+    ));
+
+    req_command(&dir).arg("upload").assert().success();
+    mock.assert();
+}
