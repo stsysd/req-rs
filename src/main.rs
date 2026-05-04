@@ -670,7 +670,7 @@ mod tests {
                 GET = "http://{}/redirect/0"
 
                 [config]
-                redirect = 2
+                redirect = 1
             "#,
             server.address(),
         );
@@ -688,11 +688,11 @@ mod tests {
 
         let err = opt
             .exec(&mut input.as_bytes(), &mut std::io::empty())
-            .expect_err("redirect overrun should produce an error");
+            .expect_err("redirect overrun should produce a Network error");
 
         mock_first.assert();
         mock_second.assert();
-        assert!(matches!(err, ReqError::Http(_)), "expected Http, got {err:?}");
+        assert!(matches!(err, ReqError::Network(_)), "expected Network, got {err:?}");
     }
 
     #[rstest]
