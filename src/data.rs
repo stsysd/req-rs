@@ -510,11 +510,7 @@ impl ReqTask {
         lines.push(format!("curl{}", flags.join("")));
         lines.push(format!(
             " -X {} '{}'",
-            request
-                .method()
-                .as_str()
-                .replace("\\", "\\\\")
-                .replace("\'", "\\'"),
+            request.method().as_str(),
             request.url().as_str(),
         ));
 
