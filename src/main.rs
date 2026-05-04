@@ -184,7 +184,7 @@ impl Opt {
         let mut buf = vec![];
         download(&mut res, &mut buf)?;
         if self.include_header {
-            print_header(&res)?;
+            print_header(&res, w)?;
         }
 
         if let Some(ref path) = self.output {
@@ -248,9 +248,8 @@ fn download<W: Write>(res: &mut reqwest::blocking::Response, w: &mut W) -> anyho
     Ok(())
 }
 
-fn print_header(res: &reqwest::blocking::Response) -> anyhow::Result<()> {
-    let out = stdout();
-    let mut out = BufWriter::new(out);
+fn print_header<W: Write>(res: &reqwest::blocking::Response, w: &mut W) -> anyhow::Result<()> {
+    let mut out = BufWriter::new(w);
     let status = res.status();
     write!(out, "{:?} {}", res.version(), status.as_str())?;
     if let Some(reason) = status.canonical_reason() {
