@@ -1,7 +1,7 @@
 use crate::interpolation::{
     create_interpolation_context, interpolate, InterpContext, InterpResult,
 };
-use anyhow::Context;
+use anyhow::{anyhow, Context};
 use base64::Engine;
 use reqwest::blocking::{multipart, Client, ClientBuilder, Request, Response};
 use reqwest::Method;
@@ -577,21 +577,26 @@ impl ReqTask {
             if skip_auth_header && k.as_str().eq_ignore_ascii_case("authorization") {
                 continue;
             }
-            let kv = format!("{}: {}", k, v.to_str().expect("invalid header string"))
-                .replace("\\", "\\\\")
-                .replace("'", "\\'");
+            let v_str = v
+                .to_str()
+                .with_context(|| format!("header `{}` contains non-ASCII bytes", k))?;
+            let kv = escape_shell_string(&format!("{}: {}", k, v_str));
             lines.push(format!(" \\\n\t-H '{}'", kv));
         }
         if let Some(body) = request.body() {
-            let bytes = body.as_bytes().unwrap();
+            // multipart bodies are streaming and have no in-memory bytes
+            let bytes = body.as_bytes().ok_or_else(|| {
+                anyhow!("`--curl` does not support streaming request bodies (e.g. multipart)")
+            })?;
             if !bytes.is_empty() {
+                let body_str = std::str::from_utf8(bytes)
+                    .context("request body is not valid UTF-8; cannot render as curl heredoc")?;
                 let mut boundary = String::from("REQUEST_BODY");
-                let body = String::from_utf8(body.as_bytes().unwrap().to_vec()).unwrap();
-                while body.contains(&boundary) {
+                while body_str.contains(&boundary) {
                     boundary = format!("__{boundary}__");
                 }
                 lines.push(format!(" \\\n\t-d @- << {boundary}\n"));
-                lines.push(body);
+                lines.push(body_str.to_string());
                 lines.push(format!("\n{boundary}"));
             }
         }

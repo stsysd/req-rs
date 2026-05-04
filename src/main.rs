@@ -1023,5 +1023,28 @@ mod tests {
             let output_str = String::from_utf8(output.into_inner()).unwrap();
             insta::assert_snapshot!(snapshot_name, output_str);
         }
+
+        #[rstest]
+        fn test_curl_multipart_returns_error() {
+            let input = r#"
+                [tasks.test]
+                POST = "https://example.com/upload"
+
+                [tasks.test.body.multipart]
+                field = "value"
+            "#;
+            let opt =
+                Opt::try_parse_from(vec!["req", "-f", "-", "--curl", "test"]).unwrap();
+            let mut output = Cursor::new(Vec::new());
+
+            let err = opt
+                .exec(&mut input.as_bytes(), &mut output)
+                .expect_err("multipart bodies cannot be rendered as a curl heredoc");
+            let msg = format!("{:#}", err);
+            assert!(
+                msg.contains("multipart") || msg.contains("streaming"),
+                "expected multipart/streaming error, got: {msg}"
+            );
+        }
     }
 }
