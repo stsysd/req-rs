@@ -286,6 +286,9 @@ curl -X POST 'https://api.example.com/users' \
   -d '{"name":"John Doe","email":"john@example.com"}'
 ```
 
+> **Note:** `--curl` does not support multipart bodies; use the request
+> directly (without `--curl`) for file uploads.
+
 ### 7. Debugging Responses
 
 Include response headers in output:

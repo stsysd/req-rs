@@ -96,6 +96,13 @@ $ req get --curl
 curl -X GET 'https://httpbin.org/get'
 ```
 
+**Limitations:**
+
+- Multipart bodies (`body.multipart`) are not supported and produce an
+  error, since the request is constructed as a streaming body that
+  cannot be inlined into a single curl command.
+- Non-UTF-8 request bodies are not supported.
+
 ## Configuration
 
 ### tasks.{NAME}
