@@ -348,3 +348,18 @@ insecure = true
 - Use descriptive task names to make your workflow self-documenting
 - Share `req.toml` files with your team for consistent API testing
 - Combine with shell scripts for automated testing workflows
+
+## Exit Codes
+
+`req` distinguishes failure categories by exit status so shell scripts and CI
+can branch appropriately.
+
+| Code | Meaning |
+|------|---------|
+| 0    | Success |
+| 1    | Internal error (unclassified — should not occur in practice) |
+| 2    | Usage error (invalid arguments, unsupported option combination such as `--curl` with multipart) |
+| 3    | Configuration error (TOML parse, env-file load, undefined `${VAR}` interpolation, unknown task) |
+| 4    | I/O error (config / output / multipart file read or write failure) |
+| 5    | Network error (DNS, connection, TLS, redirect limit, timeout) |
+| 6    | HTTP error (server returned a non-2xx status) |
