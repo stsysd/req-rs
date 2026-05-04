@@ -1,0 +1,8 @@
+---
+source: src/main.rs
+assertion_line: 894
+expression: out
+---
+first	fetch A
+second	create B
+third	<NO DESCRIPTION>

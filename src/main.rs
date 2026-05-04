@@ -866,6 +866,34 @@ mod tests {
         );
     }
 
+    #[test]
+    fn test_listing_no_task_arg() {
+        use std::io::Cursor;
+
+        let input = r#"
+            [tasks.first]
+            GET = "https://example.com/a"
+            description = "fetch A"
+
+            [tasks.second]
+            POST = "https://example.com/b"
+            description = "create B"
+
+            [tasks.third]
+            GET = "https://example.com/c"
+        "#;
+        let opt = Opt::try_parse_from(vec!["req", "-f", "-"]).unwrap();
+        let mut output = Cursor::new(Vec::new());
+
+        let code = opt
+            .exec(&mut input.as_bytes(), &mut output)
+            .expect("listing should succeed");
+        assert_eq!(code, ExitCode::SUCCESS);
+
+        let out = String::from_utf8(output.into_inner()).unwrap();
+        insta::assert_snapshot!(out);
+    }
+
     mod curl_option_tests {
         use super::*;
         use std::io::Cursor;
