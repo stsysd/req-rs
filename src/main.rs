@@ -686,13 +686,13 @@ mod tests {
                 .header("Location", server.url("/redirect/2"));
         });
 
-        let code = opt
+        let err = opt
             .exec(&mut input.as_bytes(), &mut std::io::empty())
-            .unwrap();
+            .expect_err("redirect overrun should produce an error");
 
         mock_first.assert();
         mock_second.assert();
-        assert_eq!(code, ExitCode::FAILURE);
+        assert!(matches!(err, ReqError::Http(_)), "expected Http, got {err:?}");
     }
 
     #[rstest]
@@ -938,6 +938,7 @@ mod tests {
         let err = opt
             .exec(&mut input.as_bytes(), &mut output)
             .expect_err("unknown task name should return an error");
+        assert!(matches!(err, ReqError::Config(_)), "expected Config, got {err:?}");
         let msg = format!("{err:#}");
         assert!(
             msg.contains("not defined"),
@@ -1187,6 +1188,7 @@ mod tests {
             let err = opt
                 .exec(&mut input.as_bytes(), &mut output)
                 .expect_err("multipart bodies cannot be rendered as a curl heredoc");
+            assert!(matches!(err, ReqError::Usage(_)), "expected Usage, got {err:?}");
             let msg = format!("{err:#}");
             assert!(
                 msg.contains("multipart") || msg.contains("streaming"),
