@@ -840,7 +840,7 @@ mod tests {
         assert_eq!(code, ExitCode::SUCCESS);
     }
 
-    #[test]
+    #[rstest]
     fn test_unknown_task_returns_error() {
         use std::io::Cursor;
 
@@ -866,7 +866,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[rstest]
     fn test_listing_no_task_arg() {
         use std::io::Cursor;
 
