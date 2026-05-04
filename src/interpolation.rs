@@ -75,7 +75,7 @@ where
         Some(s) => Ok(Cow::from(s)),
         None => Err(InterpError::ValueNotFound(key.to_string())),
     })
-    .map(|c| c.into())
+    .map(Into::into)
 }
 
 enum Delay<T> {

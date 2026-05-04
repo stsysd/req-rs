@@ -415,7 +415,7 @@ impl ReqConfig {
 
 /// Escape special characters in a string for safe use in shell single quotes
 fn escape_shell_string(s: &str) -> String {
-    s.replace("\\", "\\\\").replace("'", "\\'")
+    s.replace('\\', "\\\\").replace('\'', "\\'")
 }
 
 impl ReqTask {
@@ -455,7 +455,7 @@ impl ReqTask {
         let (method, url) = self.method.method_and_url();
         let mut builder = client.request(method, url);
         let q = self.queries.iter().collect::<Vec<_>>();
-        for (k, v) in q.iter() {
+        for (k, v) in &q {
             builder = builder.query(&v.iter().map(|s| (k, s)).collect::<Vec<_>>());
         }
 
@@ -466,7 +466,7 @@ impl ReqTask {
             ReqBody::Form(ref m) => builder.form(m),
             ReqBody::Multipart(ref m) => {
                 let mut form = multipart::Form::new();
-                for (k, v) in m.iter() {
+                for (k, v) in m {
                     form = match v {
                         ReqMultipartValue::Text(ref s) => form.text(k.clone(), s.clone()),
                         ReqMultipartValue::File(ref p) => form
@@ -482,7 +482,7 @@ impl ReqTask {
             builder = builder.header("Authorization", auth.authorization_header());
         }
 
-        for (k, v) in self.headers.iter() {
+        for (k, v) in &self.headers {
             for s in v.iter() {
                 builder = builder.header(k, s);
             }
@@ -505,7 +505,7 @@ impl ReqTask {
             flags.push(" -k");
         }
         if config.redirect > 0 {
-            flags.push(" -L")
+            flags.push(" -L");
         }
 
         lines.push(format!("curl{}", flags.join("")));
@@ -569,7 +569,7 @@ impl ReqTask {
             false
         };
 
-        for (k, v) in request.headers().iter() {
+        for (k, v) in request.headers() {
             // Skip Authorization header if we're using -u option for basic auth
             if skip_auth_header && k.as_str().eq_ignore_ascii_case("authorization") {
                 continue;
@@ -623,7 +623,7 @@ impl Req {
         I: IntoIterator<Item = (String, String)>,
     {
         let Req { mut variables, .. } = self;
-        for (k, v) in vals.into_iter() {
+        for (k, v) in vals {
             variables.insert(k, v);
         }
         Req { variables, ..self }
@@ -631,11 +631,11 @@ impl Req {
 
     pub fn display_tasks(&self) -> String {
         let mut strings = vec![];
-        for (k, v) in self.tasks.iter() {
-            let desc = if !v.description.is_empty() {
-                &v.description
-            } else {
+        for (k, v) in &self.tasks {
+            let desc = if v.description.is_empty() {
                 "<NO DESCRIPTION>"
+            } else {
+                &v.description
             };
             strings.push(format!("{k}\t{desc}"));
         }

@@ -252,7 +252,7 @@ fn print_header<W: Write>(res: &reqwest::blocking::Response, w: &mut W) -> anyho
     } else {
         writeln!(out)?;
     }
-    for (key, val) in res.headers().iter() {
+    for (key, val) in res.headers() {
         write!(out, "{key}: ")?;
         out.write_all(val.as_bytes())?;
         writeln!(out)?;
@@ -742,7 +742,7 @@ mod tests {
                 [tasks.test]
                 GET = "${{BASE_URL}}${{PATH}}"
             "#,
-            env_file.path().to_str().unwrap().replace("\\", "\\\\"),
+            env_file.path().to_str().unwrap().replace('\\', "\\\\"),
         );
         let opt = Opt::try_parse_from(vec!["req", "-f", "-", "test"]).unwrap();
         let mock = server.mock(|when, then| {
@@ -777,7 +777,7 @@ mod tests {
                 [tasks.test]
                 GET = "http://{}${{PATH}}"
             "#,
-            env_file1.path().to_str().unwrap().replace("\\", "\\\\"),
+            env_file1.path().to_str().unwrap().replace('\\', "\\\\"),
             server.address(),
         );
         let opt = Opt::try_parse_from(vec![
