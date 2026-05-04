@@ -452,7 +452,7 @@ impl ReqTask {
         })
     }
 
-    fn request(&self) -> anyhow::Result<(Client, Request)> {
+    pub fn build_request(&self) -> anyhow::Result<(Client, Request)> {
         let client = self.config.clone().unwrap_or_default().client()?;
         let (method, url) = self.method.method_and_url();
         let mut builder = client.request(method, url);
@@ -494,8 +494,9 @@ impl ReqTask {
 
     /// Build and execute the underlying HTTP request, returning the
     /// blocking `Response`.
+    #[allow(dead_code)]
     pub fn send(&self) -> anyhow::Result<Response> {
-        let (client, request) = self.request()?;
+        let (client, request) = self.build_request()?;
         Ok(client.execute(request)?)
     }
 
@@ -503,8 +504,7 @@ impl ReqTask {
     ///
     /// Multipart bodies and bodies that are not valid UTF-8 are not
     /// supported and return an error rather than panicking.
-    pub fn to_curl(&self) -> anyhow::Result<String> {
-        let (_, request) = self.request()?;
+    pub fn to_curl(&self, request: &Request) -> anyhow::Result<String> {
         let mut lines = vec![];
 
         let mut flags = vec![];

@@ -209,11 +209,13 @@ impl Opt {
         }
 
         if self.curl {
-            writeln!(w, "{}", task.to_curl()?)?;
+            let (_, request) = task.build_request()?;
+            writeln!(w, "{}", task.to_curl(&request)?)?;
             return Ok(ExitCode::SUCCESS);
         }
 
-        let mut res = task.send().context("fail to send request")?;
+        let (client, request) = task.build_request()?;
+        let mut res = client.execute(request).context("fail to send request")?;
         let mut buf = vec![];
         download(&mut res, &mut buf)?;
         if self.include_header {
