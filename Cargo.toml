@@ -29,7 +29,7 @@ default-features = false
 features = ["json", "blocking", "multipart", "rustls-tls"]
 
 [dev-dependencies]
-httpmock = "0.8.2"
+httpmock = "0.8.3"
 rstest = "0.26.1"
 tempfile = "3.27.0"
 uuid = { version = "1.22.0", features = ["v4"] }
