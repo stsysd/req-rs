@@ -232,11 +232,11 @@ impl ReqAuth {
 
     fn authorization_header(&self) -> String {
         match self {
-            ReqAuth::Bearer(token) => format!("Bearer {}", token),
+            ReqAuth::Bearer(token) => format!("Bearer {token}"),
             ReqAuth::Basic { username, password } => {
-                let credentials = format!("{}:{}", username, password);
+                let credentials = format!("{username}:{password}");
                 let encoded = base64::engine::general_purpose::STANDARD.encode(credentials);
-                format!("Basic {}", encoded)
+                format!("Basic {encoded}")
             }
         }
     }
@@ -471,7 +471,7 @@ impl ReqTask {
                         ReqMultipartValue::Text(ref s) => form.text(k.clone(), s.clone()),
                         ReqMultipartValue::File(ref p) => form
                             .file(k.clone(), p.clone())
-                            .context(format!("fail to read uploading file: {}", p))?,
+                            .context(format!("fail to read uploading file: {p}"))?,
                     }
                 }
                 builder.multipart(form)
@@ -576,9 +576,9 @@ impl ReqTask {
             }
             let v_str = v
                 .to_str()
-                .with_context(|| format!("header `{}` contains non-ASCII bytes", k))?;
-            let kv = escape_shell_string(&format!("{}: {}", k, v_str));
-            lines.push(format!(" \\\n\t-H '{}'", kv));
+                .with_context(|| format!("header `{k}` contains non-ASCII bytes"))?;
+            let kv = escape_shell_string(&format!("{k}: {v_str}"));
+            lines.push(format!(" \\\n\t-H '{kv}'"));
         }
         if let Some(body) = request.body() {
             // multipart bodies are streaming and have no in-memory bytes

@@ -13,8 +13,8 @@ pub enum InterpError {
 impl fmt::Display for InterpError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            InterpError::ValueNotFound(s) => write!(f, "value named \"{}\" not defined", s),
-            InterpError::CircularReference(s) => write!(f, "found circular reference in \"{}\"", s),
+            InterpError::ValueNotFound(s) => write!(f, "value named \"{s}\" not defined"),
+            InterpError::CircularReference(s) => write!(f, "found circular reference in \"{s}\""),
         }
     }
 }

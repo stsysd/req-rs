@@ -151,7 +151,7 @@ impl Opt {
 
         if let Some(path) = env_file_path {
             let vars = load_env_file(path)
-                .context(format!("fail to load env file: {}", path))?;
+                .context(format!("fail to load env file: {path}"))?;
             env_vars.extend(vars);
         }
 
@@ -162,11 +162,11 @@ impl Opt {
         let task = if let Some(task) = req.get_task(name).context("fail to resolve context")? {
             Ok(task)
         } else {
-            Err(anyhow!("task `{}` is not defined", name))
+            Err(anyhow!("task `{name}` is not defined"))
         }?;
 
         if self.dryrun {
-            println!("{:#?}", task);
+            println!("{task:#?}");
             return Ok(ExitCode::SUCCESS);
         }
 
@@ -248,12 +248,12 @@ fn print_header<W: Write>(res: &reqwest::blocking::Response, w: &mut W) -> anyho
     let status = res.status();
     write!(out, "{:?} {}", res.version(), status.as_str())?;
     if let Some(reason) = status.canonical_reason() {
-        writeln!(out, " {}", reason)?;
+        writeln!(out, " {reason}")?;
     } else {
         writeln!(out)?;
     }
     for (key, val) in res.headers().iter() {
-        write!(out, "{}: ", key)?;
+        write!(out, "{key}: ")?;
         out.write_all(val.as_bytes())?;
         writeln!(out)?;
     }
@@ -297,7 +297,7 @@ mod tests {
         );
         let opt = Opt::try_parse_from(vec!["req", "-f", "-", task]).unwrap();
         let mock = server.mock(|when, then| {
-            when.method(method).path(format!("/{}", task));
+            when.method(method).path(format!("/{task}"));
             then.status(200).body("ok");
         });
 
@@ -675,7 +675,7 @@ mod tests {
 
         use base64::Engine;
         let credentials = base64::engine::general_purpose::STANDARD.encode("admin:secret");
-        let expected_header = format!("Basic {}", credentials);
+        let expected_header = format!("Basic {credentials}");
 
         let mock = server.mock(|when, then| {
             when.method(Method::GET)
@@ -1034,7 +1034,7 @@ mod tests {
             let err = opt
                 .exec(&mut input.as_bytes(), &mut output)
                 .expect_err("multipart bodies cannot be rendered as a curl heredoc");
-            let msg = format!("{:#}", err);
+            let msg = format!("{err:#}");
             assert!(
                 msg.contains("multipart") || msg.contains("streaming"),
                 "expected multipart/streaming error, got: {msg}"
