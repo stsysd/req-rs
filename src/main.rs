@@ -840,6 +840,32 @@ mod tests {
         assert_eq!(code, ExitCode::SUCCESS);
     }
 
+    #[test]
+    fn test_unknown_task_returns_error() {
+        use std::io::Cursor;
+
+        let input = r#"
+            [tasks.exists]
+            GET = "https://example.com/"
+        "#;
+        let opt =
+            Opt::try_parse_from(vec!["req", "-f", "-", "does-not-exist"]).unwrap();
+        let mut output = Cursor::new(Vec::new());
+
+        let err = opt
+            .exec(&mut input.as_bytes(), &mut output)
+            .expect_err("unknown task name should return an error");
+        let msg = format!("{err:#}");
+        assert!(
+            msg.contains("not defined"),
+            "expected 'not defined' in error, got: {msg}"
+        );
+        assert!(
+            msg.contains("does-not-exist"),
+            "expected task name in error, got: {msg}"
+        );
+    }
+
     mod curl_option_tests {
         use super::*;
         use std::io::Cursor;
