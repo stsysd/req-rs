@@ -23,3 +23,24 @@ GET = "{}/hello"
     req_command(&dir).arg("hello").assert().success();
     mock.assert();
 }
+
+#[test]
+fn http_500_exits_with_code_1() {
+    let server = MockServer::start();
+    let mock = server.mock(|when, then| {
+        when.method(GET).path("/boom");
+        then.status(500).body("server error");
+    });
+
+    let dir = TestDir::new();
+    dir.write_config(&format!(
+        r#"
+[tasks.boom]
+GET = "{}/boom"
+"#,
+        server.base_url()
+    ));
+
+    req_command(&dir).arg("boom").assert().code(1);
+    mock.assert();
+}
