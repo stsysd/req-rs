@@ -104,6 +104,16 @@ impl std::fmt::Display for ReqError {
 
 impl Error for ReqError {}
 
+// `dead_code` allow is removed in Task 4 when classify_build_error is used by `Opt::exec`.
+#[allow(dead_code)]
+fn classify_build_error(err: anyhow::Error) -> ReqError {
+    if err.chain().any(|src| src.is::<std::io::Error>()) {
+        ReqError::Io(err)
+    } else {
+        ReqError::Config(err)
+    }
+}
+
 #[derive(Debug, Parser)]
 #[command(name = "req", about, version)]
 struct Opt {
@@ -1120,6 +1130,22 @@ mod tests {
             assert_eq!(code, ExitCode::SUCCESS);
             let output_str = String::from_utf8(output.into_inner()).unwrap();
             insta::assert_snapshot!(snapshot_name, output_str);
+        }
+
+        #[rstest]
+        fn classify_build_error_with_io_source_is_io() {
+            use std::io;
+            let io_err = io::Error::new(io::ErrorKind::NotFound, "missing");
+            let chained: anyhow::Error = anyhow::Error::new(io_err).context("opening upload");
+            let classified = classify_build_error(chained);
+            assert!(matches!(classified, ReqError::Io(_)));
+        }
+
+        #[rstest]
+        fn classify_build_error_without_io_source_is_config() {
+            let plain = anyhow!("malformed URL");
+            let classified = classify_build_error(plain);
+            assert!(matches!(classified, ReqError::Config(_)));
         }
 
         #[rstest]
