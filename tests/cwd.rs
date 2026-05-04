@@ -32,7 +32,8 @@ fn multipart_file_resolved_from_cwd() {
     let server = MockServer::start();
     let mock = server.mock(|when, then| {
         when.method(POST)
-            .path("/upload");
+            .path("/upload")
+            .body_includes("hello-from-disk");
         then.status(200).body("ok");
     });
 
