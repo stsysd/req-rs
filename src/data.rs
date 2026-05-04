@@ -5,6 +5,7 @@ use anyhow::{anyhow, Context};
 use base64::Engine;
 use reqwest::blocking::{multipart, Client, ClientBuilder, Request, Response};
 use reqwest::Method;
+use serde::Deserialize;
 use serde_json::value::Value;
 use std::collections::BTreeMap;
 
