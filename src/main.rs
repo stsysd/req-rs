@@ -66,6 +66,8 @@ where
     ))
 }
 
+// `dead_code` allow is removed in Task 4 when ReqError is consumed by `main()`.
+#[allow(dead_code)]
 #[derive(Debug)]
 pub(crate) enum ReqError {
     Usage(anyhow::Error),
@@ -75,8 +77,9 @@ pub(crate) enum ReqError {
     Http(anyhow::Error),
 }
 
+#[allow(dead_code)]
 impl ReqError {
-    fn exit_code(&self) -> ExitCode {
+    pub(crate) fn exit_code(&self) -> ExitCode {
         match self {
             Self::Usage(_) => ExitCode::from(2),
             Self::Config(_) => ExitCode::from(3),
@@ -309,7 +312,6 @@ mod tests {
     fn server() -> MockServer {
         MockServer::start()
     }
-
 
     #[rstest]
     #[case::usage(ReqError::Usage(anyhow!("u")), ExitCode::from(2))]
