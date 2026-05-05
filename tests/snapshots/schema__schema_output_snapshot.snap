@@ -89,12 +89,6 @@ expression: stdout
     "ReqBody": {
       "oneOf": [
         {
-          "type": "string",
-          "enum": [
-            "empty"
-          ]
-        },
-        {
           "type": "object",
           "properties": {
             "plain": {
@@ -281,7 +275,14 @@ expression: stdout
           ]
         },
         "body": {
-          "$ref": "#/definitions/ReqBody"
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ReqBody"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "config": {
           "anyOf": [
