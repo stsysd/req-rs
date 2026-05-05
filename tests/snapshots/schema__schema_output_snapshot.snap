@@ -1,0 +1,416 @@
+---
+source: tests/schema.rs
+expression: stdout
+---
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Req",
+  "description": "Top-level deserialized representation of a `req.toml` file: the named\ntask table, shared variables, and global config.",
+  "type": "object",
+  "properties": {
+    "config": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/ReqConfig"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "tasks": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/definitions/ReqTask"
+      }
+    },
+    "variables": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "default": {}
+    }
+  },
+  "required": [
+    "tasks"
+  ],
+  "definitions": {
+    "EnvFile": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "string"
+        }
+      ]
+    },
+    "ReqAuth": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "bearer": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "bearer"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "basic": {
+              "type": "object",
+              "properties": {
+                "password": {
+                  "type": "string"
+                },
+                "username": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "username",
+                "password"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "basic"
+          ]
+        }
+      ]
+    },
+    "ReqBody": {
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "empty"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "plain": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "plain"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "json": true
+          },
+          "additionalProperties": false,
+          "required": [
+            "json"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "form": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "form"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "multipart": {
+              "type": "object",
+              "additionalProperties": {
+                "$ref": "#/definitions/ReqMultipartValue"
+              }
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "multipart"
+          ]
+        }
+      ]
+    },
+    "ReqConfig": {
+      "type": "object",
+      "properties": {
+        "env-file": {
+          "$ref": "#/definitions/EnvFile"
+        },
+        "insecure": {
+          "type": "boolean",
+          "default": false
+        },
+        "proxy": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ReqProxy"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "redirect": {
+          "type": "integer",
+          "format": "uint",
+          "default": 0,
+          "minimum": 0
+        }
+      }
+    },
+    "ReqMultipartValue": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "file": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "file"
+          ]
+        },
+        {
+          "type": "string"
+        }
+      ]
+    },
+    "ReqParam": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      ]
+    },
+    "ReqProxy": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/ReqProxyUrl"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "http": {
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/ReqProxyUrl"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "https": {
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/ReqProxyUrl"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "ReqProxyUrl": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "password": {
+              "type": "string"
+            },
+            "url": {
+              "type": "string"
+            },
+            "username": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "url",
+            "username",
+            "password"
+          ]
+        }
+      ]
+    },
+    "ReqTask": {
+      "description": "A single, fully-resolved HTTP task: method + URL + headers/queries/body\nplus optional auth and per-task config.",
+      "type": "object",
+      "properties": {
+        "auth": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ReqAuth"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "body": {
+          "$ref": "#/definitions/ReqBody"
+        },
+        "config": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ReqConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "description": {
+          "type": "string",
+          "default": ""
+        },
+        "headers": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/ReqParam"
+          }
+        },
+        "queries": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/ReqParam"
+          }
+        }
+      },
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "GET": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "GET"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "POST": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "POST"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "PUT": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "PUT"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "DELETE": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "DELETE"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "HEAD": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "HEAD"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "OPTIONS": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "OPTIONS"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "CONNECT": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "CONNECT"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "PATCH": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "PATCH"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "TRACE": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "TRACE"
+          ]
+        }
+      ]
+    }
+  }
+}

@@ -79,3 +79,12 @@ fn schema_flag_conflicts_with_include_header() {
         .assert()
         .code(2);
 }
+
+#[test]
+fn schema_output_snapshot() {
+    let dir = TestDir::new();
+    let output = req_command(&dir).arg("--schema").output().expect("run req");
+    assert!(output.status.success(), "req --schema must succeed");
+    let stdout = String::from_utf8(output.stdout).expect("schema output is UTF-8");
+    insta::assert_snapshot!(stdout);
+}
