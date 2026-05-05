@@ -5,7 +5,6 @@ use common::{req_command, TestDir};
 #[test]
 fn schema_flag_alone_succeeds() {
     let dir = TestDir::new();
-    // schema 生成は req.toml に依存しないが、cwd の都合で空ディレクトリで起動する
     req_command(&dir).arg("--schema").assert().success();
 }
 
