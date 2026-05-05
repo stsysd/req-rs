@@ -164,6 +164,22 @@ struct Opt {
         help = "Dump internal structure of specified task without sending request"
     )]
     dryrun: bool,
+
+    #[arg(
+        long,
+        help = "Print JSON Schema for req.toml to stdout and exit",
+        conflicts_with_all = [
+            "name",
+            "DEF",
+            "OUTPUT",
+            "include_header",
+            "KEY=VALUE",
+            "FILE",
+            "curl",
+            "dryrun",
+        ],
+    )]
+    schema: bool,
 }
 
 impl Opt {
