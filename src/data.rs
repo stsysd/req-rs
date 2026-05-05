@@ -5,11 +5,12 @@ use anyhow::{anyhow, Context};
 use base64::Engine;
 use reqwest::blocking::{multipart, Client, ClientBuilder, Request, Response};
 use reqwest::Method;
+use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::value::Value;
 use std::collections::BTreeMap;
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, JsonSchema)]
 #[serde(rename_all = "UPPERCASE")]
 enum ReqMethod {
     Get(String),
@@ -23,7 +24,7 @@ enum ReqMethod {
     Trace(String),
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, JsonSchema)]
 enum ReqMultipartValue {
     #[serde(rename = "file")]
     File(String),
@@ -32,7 +33,7 @@ enum ReqMultipartValue {
     Text(String),
 }
 
-#[derive(Debug, Clone, Deserialize, Default)]
+#[derive(Debug, Clone, Deserialize, Default, JsonSchema)]
 #[serde(rename_all = "lowercase")]
 enum ReqBody {
     #[default]
@@ -43,7 +44,7 @@ enum ReqBody {
     Multipart(BTreeMap<String, ReqMultipartValue>),
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, JsonSchema)]
 enum ReqParam {
     #[serde(untagged)]
     Single(String),
@@ -72,7 +73,7 @@ impl IntoIterator for ReqParam {
     }
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, JsonSchema)]
 #[serde(untagged)]
 enum EnvFile {
     Bool(bool),
@@ -95,7 +96,7 @@ impl EnvFile {
     }
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, JsonSchema)]
 #[serde(untagged)]
 enum ReqProxyUrl {
     Simple(String),
@@ -141,7 +142,7 @@ impl ReqProxyUrl {
     }
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, JsonSchema)]
 #[serde(untagged)]
 enum ReqProxy {
     Simple(ReqProxyUrl),
@@ -198,7 +199,7 @@ impl ReqProxy {
     }
 }
 
-#[derive(Debug, Clone, Deserialize, Default)]
+#[derive(Debug, Clone, Deserialize, Default, JsonSchema)]
 struct ReqConfig {
     #[serde(default)]
     insecure: bool,
@@ -210,7 +211,7 @@ struct ReqConfig {
     proxy: Option<ReqProxy>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, JsonSchema)]
 #[serde(rename_all = "lowercase")]
 enum ReqAuth {
     Bearer(String),
@@ -242,7 +243,7 @@ impl ReqAuth {
 
 /// A single, fully-resolved HTTP task: method + URL + headers/queries/body
 /// plus optional auth and per-task config.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, JsonSchema)]
 pub struct ReqTask {
     #[serde(flatten)]
     method: ReqMethod,
@@ -268,7 +269,7 @@ pub struct ReqTask {
 
 /// Top-level deserialized representation of a `req.toml` file: the named
 /// task table, shared variables, and global config.
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, JsonSchema)]
 pub struct Req {
     #[serde(rename = "tasks", alias = "req")]
     tasks: BTreeMap<String, ReqTask>,
