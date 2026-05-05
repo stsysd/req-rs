@@ -349,6 +349,16 @@ insecure = true
 - Share `req.toml` files with your team for consistent API testing
 - Combine with shell scripts for automated testing workflows
 
+## Editor integration
+
+`req` ships its own JSON Schema for `req.toml`. Generate it once and point your editor at the file:
+
+```sh
+req --schema > ~/.config/tombi/req-schema.json
+```
+
+The schema always matches the version of `req` you have installed — re-run the command after upgrading. Configure your editor (e.g. [Tombi](https://tombi-toml.github.io/tombi/)) to use this schema for `req.toml` files.
+
 ## Exit Codes
 
 `req` distinguishes failure categories by exit status so shell scripts and CI

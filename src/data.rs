@@ -5,11 +5,12 @@ use anyhow::{anyhow, Context};
 use base64::Engine;
 use reqwest::blocking::{multipart, Client, ClientBuilder, Request, Response};
 use reqwest::Method;
+use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::value::Value;
 use std::collections::BTreeMap;
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, JsonSchema)]
 #[serde(rename_all = "UPPERCASE")]
 enum ReqMethod {
     Get(String),
@@ -23,7 +24,7 @@ enum ReqMethod {
     Trace(String),
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, JsonSchema)]
 enum ReqMultipartValue {
     #[serde(rename = "file")]
     File(String),
@@ -32,18 +33,16 @@ enum ReqMultipartValue {
     Text(String),
 }
 
-#[derive(Debug, Clone, Deserialize, Default)]
+#[derive(Debug, Clone, Deserialize, JsonSchema)]
 #[serde(rename_all = "lowercase")]
 enum ReqBody {
-    #[default]
-    Empty,
     Plain(String),
     Json(Value),
     Form(BTreeMap<String, String>),
     Multipart(BTreeMap<String, ReqMultipartValue>),
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, JsonSchema)]
 enum ReqParam {
     #[serde(untagged)]
     Single(String),
@@ -72,7 +71,7 @@ impl IntoIterator for ReqParam {
     }
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, JsonSchema)]
 #[serde(untagged)]
 enum EnvFile {
     Bool(bool),
@@ -95,7 +94,7 @@ impl EnvFile {
     }
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, JsonSchema)]
 #[serde(untagged)]
 enum ReqProxyUrl {
     Simple(String),
@@ -141,7 +140,7 @@ impl ReqProxyUrl {
     }
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, JsonSchema)]
 #[serde(untagged)]
 enum ReqProxy {
     Simple(ReqProxyUrl),
@@ -198,7 +197,7 @@ impl ReqProxy {
     }
 }
 
-#[derive(Debug, Clone, Deserialize, Default)]
+#[derive(Debug, Clone, Deserialize, Default, JsonSchema)]
 struct ReqConfig {
     #[serde(default)]
     insecure: bool,
@@ -210,7 +209,7 @@ struct ReqConfig {
     proxy: Option<ReqProxy>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, JsonSchema)]
 #[serde(rename_all = "lowercase")]
 enum ReqAuth {
     Bearer(String),
@@ -242,7 +241,7 @@ impl ReqAuth {
 
 /// A single, fully-resolved HTTP task: method + URL + headers/queries/body
 /// plus optional auth and per-task config.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, JsonSchema)]
 pub struct ReqTask {
     #[serde(flatten)]
     method: ReqMethod,
@@ -254,7 +253,7 @@ pub struct ReqTask {
     queries: BTreeMap<String, ReqParam>,
 
     #[serde(default)]
-    body: ReqBody,
+    body: Option<ReqBody>,
 
     #[serde(default)]
     description: String,
@@ -268,7 +267,7 @@ pub struct ReqTask {
 
 /// Top-level deserialized representation of a `req.toml` file: the named
 /// task table, shared variables, and global config.
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, JsonSchema)]
 pub struct Req {
     #[serde(rename = "tasks", alias = "req")]
     tasks: BTreeMap<String, ReqTask>,
@@ -348,7 +347,6 @@ fn interpolate_toml_value(val: &Value, ctxt: &InterpContext) -> InterpResult<Val
 impl ReqBody {
     fn interpolate(&self, ctxt: &InterpContext) -> InterpResult<Self> {
         Ok(match self {
-            ReqBody::Empty => ReqBody::Empty,
             ReqBody::Plain(s) => ReqBody::Plain(interpolate(s, ctxt)?),
             ReqBody::Json(v) => ReqBody::Json(interpolate_toml_value(v, ctxt)?),
             ReqBody::Form(m) => ReqBody::Form(
@@ -434,7 +432,7 @@ impl ReqTask {
         let method = method.interpolate(ctxt)?;
         let headers = interpolate_btree_map(headers, ctxt)?;
         let queries = interpolate_btree_map(queries, ctxt)?;
-        let body = body.interpolate(ctxt)?;
+        let body = body.as_ref().map(|b| b.interpolate(ctxt)).transpose()?;
         let auth = auth.as_ref().map(|a| a.interpolate(ctxt)).transpose()?;
         let config = config
             .as_ref()
@@ -462,11 +460,11 @@ impl ReqTask {
         }
 
         builder = match self.body {
-            ReqBody::Empty => builder,
-            ReqBody::Plain(ref s) => builder.body(s.clone()),
-            ReqBody::Json(ref v) => builder.json(v),
-            ReqBody::Form(ref m) => builder.form(m),
-            ReqBody::Multipart(ref m) => {
+            None => builder,
+            Some(ReqBody::Plain(ref s)) => builder.body(s.clone()),
+            Some(ReqBody::Json(ref v)) => builder.json(v),
+            Some(ReqBody::Form(ref m)) => builder.form(m),
+            Some(ReqBody::Multipart(ref m)) => {
                 let mut form = multipart::Form::new();
                 for (k, v) in m {
                     form = match v {
