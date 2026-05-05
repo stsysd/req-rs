@@ -188,6 +188,17 @@ impl Opt {
         R: Read,
         W: Write,
     {
+        if self.schema {
+            let settings = schemars::generate::SchemaSettings::draft07();
+            let generator = schemars::SchemaGenerator::new(settings);
+            let schema = generator.into_root_schema_for::<Req>();
+            let json = serde_json::to_string_pretty(&schema)
+                .expect("BUG: schema serialization should be infallible");
+            writeln!(w, "{json}")
+                .expect("BUG: writing to provided writer should not fail in --schema path");
+            return Ok(ExitCode::SUCCESS);
+        }
+
         let input = if self.input == "-" {
             let mut buf = String::new();
             r.read_to_string(&mut buf)
